@@ -29,6 +29,15 @@ This starts PHP's built-in server on `http://localhost:8000`, serving `public/` 
 root. For production, point your web server's document root at `public/` (an `.htaccess` is
 included for Apache + `mod_rewrite`; for nginx, route unmatched requests to `index.php`).
 
+## Deployment
+
+`.github/workflows/deploy.yml` deploys to production automatically on every push to `main`
+(i.e. whenever a PR is merged): it runs the test suite, rebuilds `vendor/` without dev
+dependencies, and uploads the repo (minus `.github/`, `tests/`, and VCS files) over FTP to the
+server root, using the repository secrets `FTP_HOST`, `FTP_USERNAME`, and `FTP_PASSWORD`. This
+assumes the web server's document root points at the `public/` subfolder of that upload
+directory, since `public/index.php` loads `vendor/` and `src/` via paths relative to itself.
+
 ## Tests
 
 ```
