@@ -445,11 +445,13 @@ paths:
         given, `fg` is solved; if only `og` is given (optionally with `fg`), `abv` is solved;
         otherwise `og` is solved from `fg` and `abv` (using a default for whichever of those two
         is also omitted). This mirrors the priority used by MeadBot's `!potential-alcohol`
-        command, but — since this is new API surface with no existing consumers — always
-        converts BRIX/BAUME inputs to SG before computing and uses a single consistent ABV↔SG
-        formula throughout, correcting two bugs present in that command (see the MeadBot repo's
-        `GravityCalculator.resolveGravityAbvTrio` for details on those bugs, preserved there for
-        backward compatibility with the live Discord command).
+        command. That command originally had two bugs this endpoint was built to avoid — not
+        converting BRIX/BAUME inputs to SG in two of its three solve branches, and silently
+        ignoring a specified og/abv that happened to equal its own default — both since fixed in
+        MeadBot too. One difference remains: since this endpoint has no existing consumers, it
+        uses a single consistent ABV↔SG formula for both solve-og and solve-fg, where MeadBot's
+        command still uses a different approximation in each (see the MeadBot repo's
+        `GravityCalculator.resolveGravityAbvTrio` for details).
       operationId: potentialAlcohol
       requestBody:
         required: true

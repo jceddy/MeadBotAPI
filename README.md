@@ -96,11 +96,14 @@ route called with the wrong HTTP method, and `200` otherwise.
 | GET | `/api/v1/random` | `max` | `RandomInteger` |
 | POST | `/api/v1/hours-string` | `timing`, `break3` (required only when `timing` is `"break"`) | `MakeHoursString` |
 
-\* `/potential-alcohol` mirrors the *intent* of MeadBot's `!potential-alcohol` command rather
-than its exact behavior: that command has two known bugs (a specified value that happens to
-equal its default is silently ignored, and BRIX/BAUME inputs aren't converted to SG before use
-in two of its three solve branches) which are preserved as-is in the MeadBot repo for backward
-compatibility, but corrected here since this endpoint has no existing consumers to break.
+\* `/potential-alcohol` mirrors the *intent* of MeadBot's `!potential-alcohol` command. That
+command originally had two bugs — a specified value that happened to equal its default being
+silently ignored, and BRIX/BAUME inputs not being converted to SG before use in two of its three
+solve branches — both since fixed in the MeadBot repo too. One difference remains: MeadBot's
+"solve fg" branch (`og`+`abv` given) still uses a different ABV↔SG approximation than its
+"solve og" branch (`fg`+`abv` given), while this endpoint uses the same formula (an iterative
+search against the real cubic ABV formula) for both, since it has no existing consumers to
+preserve that inconsistency for.
 
 ### Examples
 

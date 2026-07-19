@@ -173,13 +173,14 @@ final class GravityCalculator
      *  - only og specified (or og+fg) -> solve abv
      *  - otherwise -> solve og (from fg and abv)
      *
-     * Unlike !potential-alcohol, this always converts BRIX/BAUME inputs to SG before computing
-     * (that command skips the conversion in two of its three branches, which produces incorrect
-     * results — see GravityCalculator.resolveGravityAbvTrio in the MeadBot repo) and always uses
-     * the same ABV<->SG-delta formula (stormABVtoSG's iterative search against the real cubic ABV
-     * formula) for both the solve-fg and solve-og branches, rather than the command's inconsistent
-     * mix of formulas. A JSON API has no equivalent of "value happens to match an unstated CLI
-     * default", so "specified" here just means the field was present in the request.
+     * !potential-alcohol originally had two bugs this function was built to avoid — skipping the
+     * BRIX/BAUME-to-SG conversion in two of its three solve branches, and silently ignoring a
+     * specified og/abv that happened to equal the command's own default — both since fixed in
+     * MeadBot's GravityCalculator.resolveGravityAbvTrio too. One difference remains: that
+     * function's solve-fg branch still uses a different ABV<->SG approximation than its solve-og
+     * branch, while this function always uses the same one (stormABVtoSG's iterative search
+     * against the real cubic ABV formula) for both, since it has no existing consumers to
+     * preserve that inconsistency for.
      *
      * @return array<string, mixed>
      */
