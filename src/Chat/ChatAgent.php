@@ -27,30 +27,47 @@ final class ChatAgent
     /**
      * run(messages) - given a conversation so far (OpenAI-style {role, content} messages, e.g.
      * starting with a system message and the user's latest message), runs the tool-calling loop
-     * and returns the final assistant reply plus the full updated message list (including any
-     * assistant tool-call turns and tool-result turns), so the caller can pass it back in on the
-     * next request to continue the conversation.
+     * and returns the final assistant reply, the full updated message list (including any
+     * assistant tool-call turns and tool-result turns — pass this back in as the next request's
+     * `messages` to continue the conversation), and the total token usage across every Fireworks
+     * call this request made (one user-facing turn can trigger several, one per tool-call round).
+     *
+     * Throws ChatUsageException on any failure — always carrying whatever usage was accumulated
+     * before the failure, since those calls were still billed even though the request as a whole
+     * didn't complete.
      *
      * @param array<int, array<string, mixed>> $messages
-     * @return array{reply: string, messages: array<int, array<string, mixed>>}
+     * @return array{
+     *     reply: string,
+     *     messages: array<int, array<string, mixed>>,
+     *     usage: array{prompt_tokens: int, cached_prompt_tokens: int, completion_tokens: int, total_tokens: int}
+     * }
      */
     public function run(array $messages): array
     {
         $messages = array_values($messages);
         $tools = Tools::definitions();
+        $usage = self::emptyUsage();
 
         for ($i = 0; $i < self::MAX_TOOL_ITERATIONS; $i++) {
-            $response = $this->client->chatCompletion($messages, $tools);
+            try {
+                $response = $this->client->chatCompletion($messages, $tools);
+            } catch (RuntimeException $e) {
+                throw new ChatUsageException($e->getMessage(), $usage, $e);
+            }
+
+            self::accumulate($usage, $response['usage'] ?? []);
+
             $message = $response['choices'][0]['message'] ?? null;
             if (!is_array($message)) {
-                throw new RuntimeException('Fireworks response had no message.');
+                throw new ChatUsageException('Fireworks response had no message.', $usage);
             }
 
             $messages[] = $message;
             $toolCalls = $message['tool_calls'] ?? [];
 
             if (!is_array($toolCalls) || $toolCalls === []) {
-                return ['reply' => (string) ($message['content'] ?? ''), 'messages' => $messages];
+                return ['reply' => (string) ($message['content'] ?? ''), 'messages' => $messages, 'usage' => $usage];
             }
 
             foreach ($toolCalls as $toolCall) {
@@ -58,7 +75,24 @@ final class ChatAgent
             }
         }
 
-        throw new RuntimeException('Exceeded maximum tool-calling iterations (' . self::MAX_TOOL_ITERATIONS . ').');
+        throw new ChatUsageException('Exceeded maximum tool-calling iterations (' . self::MAX_TOOL_ITERATIONS . ').', $usage);
+    }
+
+    /** @return array{prompt_tokens: int, cached_prompt_tokens: int, completion_tokens: int, total_tokens: int} */
+    private static function emptyUsage(): array
+    {
+        return ['prompt_tokens' => 0, 'cached_prompt_tokens' => 0, 'completion_tokens' => 0, 'total_tokens' => 0];
+    }
+
+    /**
+     * @param array{prompt_tokens: int, cached_prompt_tokens: int, completion_tokens: int, total_tokens: int} $usage
+     * @param array<string, mixed> $responseUsage
+     */
+    private static function accumulate(array &$usage, array $responseUsage): void
+    {
+        foreach (['prompt_tokens', 'cached_prompt_tokens', 'completion_tokens', 'total_tokens'] as $key) {
+            $usage[$key] += (int) ($responseUsage[$key] ?? 0);
+        }
     }
 
     /**

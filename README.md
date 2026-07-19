@@ -142,8 +142,18 @@ curl -s -X POST http://localhost:8000/api/v1/chat \
   -H 'Content-Type: application/json' \
   -H 'X-Api-Key: <CHAT_API_KEY>' \
   -d '{"messages": [{"role": "user", "content": "I have 5 gallons at 1.100 SG. What'\''s my potential ABV?"}]}'
-# {"error":false,"reply":"...","messages":[...]}
+# {"error":false,"reply":"...","messages":[...],"usage":{"prompt_tokens":2143,"cached_prompt_tokens":1980,"completion_tokens":42,"total_tokens":2185},"costUsd":0.0000572}
 ```
+
+The response's `usage` is the *sum* across every Fireworks call the request made — one `/chat`
+call can trigger several (one per tool-calling round) — split into `prompt_tokens` (total input),
+`cached_prompt_tokens` (the subset that hit Fireworks' prompt cache, billed at a lower rate — see
+[Setup](#setup) below), and `completion_tokens`. `costUsd` is computed from that using the
+`FIREWORKS_PRICE_*` rates described below; it's an estimate for cost tracking, not a
+billing-authoritative figure (Fireworks' own dashboard is). Both fields are included even on a
+`400` error response whenever at least one underlying call completed before the failure (e.g. a
+later tool-call round failed, or the agent hit its iteration cap) — those calls were still billed
+by Fireworks regardless of whether the request as a whole succeeded.
 
 ### Setup
 
@@ -172,6 +182,12 @@ CHAT_API_KEY=...
 The model defaults to `accounts/fireworks/models/gpt-oss-120b` (OpenAI's open-weight
 reasoning/tool-calling model, hosted on Fireworks); override it with a third `.env` line,
 `FIREWORKS_MODEL=accounts/fireworks/models/...`, to try another one.
+
+`costUsd` in the response is computed from `FIREWORKS_PRICE_INPUT_PER_1M`,
+`FIREWORKS_PRICE_CACHED_INPUT_PER_1M`, and `FIREWORKS_PRICE_OUTPUT_PER_1M` (each a dollar rate
+per 1M tokens), defaulting to gpt-oss-120b's published pricing (`0.15` / `0.01` / `0.60`). If you
+change `FIREWORKS_MODEL`, set these three to match its pricing — they aren't looked up
+automatically.
 
 ## Project structure
 

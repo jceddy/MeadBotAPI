@@ -5,6 +5,8 @@ declare(strict_types=1);
 require dirname(__DIR__) . '/vendor/autoload.php';
 
 use MeadBotApi\Chat\ChatAgent;
+use MeadBotApi\Chat\ChatUsageException;
+use MeadBotApi\Chat\CostCalculator;
 use MeadBotApi\Chat\FireworksClient;
 use MeadBotApi\Http\Env;
 use MeadBotApi\Http\Operations;
@@ -83,16 +85,34 @@ $router->post('/api/v1/chat', function (array $p) {
     $model = getenv('FIREWORKS_MODEL') ?: 'accounts/fireworks/models/gpt-oss-120b';
     $agent = new ChatAgent(new FireworksClient($fireworksKey, $model));
 
+    // Defaults are accounts/fireworks/models/gpt-oss-120b's per-1M-token pricing; override via
+    // .env if FIREWORKS_MODEL is ever changed to a model with different rates.
+    $pricing = new CostCalculator(
+        (float) (getenv('FIREWORKS_PRICE_INPUT_PER_1M') ?: 0.15),
+        (float) (getenv('FIREWORKS_PRICE_CACHED_INPUT_PER_1M') ?: 0.01),
+        (float) (getenv('FIREWORKS_PRICE_OUTPUT_PER_1M') ?: 0.60)
+    );
+
     try {
         $result = $agent->run($messages);
-    } catch (\RuntimeException $e) {
-        return ['error' => true, 'errorMessage' => 'Chat backend error: ' . $e->getMessage()];
+    } catch (ChatUsageException $e) {
+        // Fireworks already billed for whatever calls succeeded before this failure, even
+        // though the request as a whole didn't complete — surface usage/cost here too so a
+        // balance tracker doesn't silently miss it.
+        return [
+            'error' => true,
+            'errorMessage' => 'Chat backend error: ' . $e->getMessage(),
+            'usage' => $e->usage,
+            'costUsd' => $pricing->costUsd($e->usage),
+        ];
     }
 
     return [
         'error' => false,
         'reply' => $result['reply'],
         'messages' => $result['messages'],
+        'usage' => $result['usage'],
+        'costUsd' => $pricing->costUsd($result['usage']),
     ];
 });
 

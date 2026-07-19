@@ -1219,7 +1219,7 @@ paths:
                     content: I have 5 gallons at 1.100 SG. What's my potential ABV?
       responses:
         '200':
-          description: Assistant reply, plus the full updated conversation.
+          description: Assistant reply, plus the full updated conversation and token usage/cost.
           content:
             application/json:
               schema:
@@ -1237,14 +1237,32 @@ paths:
                           request — pass this back as the next request's `messages`.
                         items:
                           type: object
+                      usage:
+                        $ref: '#/components/schemas/ChatUsage'
+                      costUsd:
+                        type: number
+                        description: >
+                          Estimated USD cost of `usage`, from the FIREWORKS_PRICE_* rates
+                          configured on the server (defaults match gpt-oss-120b's published
+                          pricing). Not billing-authoritative — Fireworks' own usage dashboard is.
         '400':
           description: >
             Missing/invalid request, missing/invalid `X-Api-Key`, chat not configured on this
             server (no `FIREWORKS_API_KEY`/`CHAT_API_KEY`), or a Fireworks API/network failure.
+            `usage`/`costUsd` are included even here whenever at least one underlying Fireworks
+            call completed before the failure (e.g. a later tool-call round failed, or the
+            iteration cap was hit) — those calls were still billed by Fireworks.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - type: object
+                    properties:
+                      usage:
+                        $ref: '#/components/schemas/ChatUsage'
+                      costUsd:
+                        type: number
 
 components:
   securitySchemes:
@@ -1282,6 +1300,23 @@ components:
           type: number
           description: Multiplier to convert an amount in this unit to the module's base unit.
           example: 3.7854117891
+
+    ChatUsage:
+      type: object
+      description: >
+        Total token usage across every Fireworks call the request made — a single /chat request
+        can trigger several (one per tool-calling round), so these are already summed.
+      properties:
+        prompt_tokens:
+          type: integer
+          description: Total input tokens (cached + uncached combined).
+        cached_prompt_tokens:
+          type: integer
+          description: The subset of prompt_tokens that hit Fireworks' prompt cache (billed at a lower rate).
+        completion_tokens:
+          type: integer
+        total_tokens:
+          type: integer
 
     Error:
       type: object
