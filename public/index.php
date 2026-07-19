@@ -141,6 +141,81 @@ function parseNutrientRegimen(?string $value): int
     };
 }
 
+function parseVolumeUnits(string $value): int
+{
+    $id = CalculatorApi::getVolumeUnit($value);
+    if ($id === null) {
+        throw new InvalidArgumentException("Unknown volume units: {$value}");
+    }
+    return $id;
+}
+
+function parseTemperatureUnits(string $value): int
+{
+    return match ($value) {
+        'c', 'celsius', 'celcius' => Constants::TEMPERATURE_UNIT_CELSIUS,
+        'f', 'fahrenheit' => Constants::TEMPERATURE_UNIT_FAHRENHEIT,
+        default => throw new InvalidArgumentException("Unknown temperature units: {$value}"),
+    };
+}
+
+/**
+ * Validates and normalizes an optional array of additional-sugar specifications for
+ * calculate-mead into the shape BatchCalculator::calculateMead expects. Each entry's `type` and
+ * `quantityUnits` are resolved via the same lookups as the sugar-sources/honey-units endpoints;
+ * `sugarContent`/`yanMultiplier` default to that sugar source's known values when omitted (unlike
+ * the MeadBot command, which always defaults sugar_content to honey's regardless of type unless
+ * explicitly overridden — a quirk not worth reproducing on a fresh endpoint).
+ *
+ * @return array<int, array<string, mixed>>|null
+ */
+function parseAdditionalSugars(mixed $value): ?array
+{
+    if ($value === null) {
+        return null;
+    }
+    if (!is_array($value)) {
+        throw new InvalidArgumentException('additionalSugars must be an array.');
+    }
+
+    $sugars = [];
+    foreach (array_values($value) as $i => $entry) {
+        if (!is_array($entry)) {
+            throw new InvalidArgumentException("additionalSugars[{$i}] must be an object.");
+        }
+        $typeName = (string) requireParam($entry, 'type');
+        $type = CalculatorApi::getSugarSourceIdentifier($typeName);
+        if ($type === null) {
+            throw new InvalidArgumentException("additionalSugars[{$i}]: unknown sugar type: {$typeName}");
+        }
+        $quantityUnitsName = (string) requireParam($entry, 'quantityUnits');
+        $quantityUnits = CalculatorApi::getHoneyUnit($quantityUnitsName);
+        if ($quantityUnits === null) {
+            throw new InvalidArgumentException("additionalSugars[{$i}]: unknown quantityUnits: {$quantityUnitsName}");
+        }
+
+        $quantityAmount = optionalNumeric($entry, 'quantityAmount');
+        $sugarContent = optionalNumeric($entry, 'sugarContent') ?? Constants::SUGAR_SOURCE_INFO[$type]['percent'];
+        $yanMultiplier = optionalNumeric($entry, 'yanMultiplier') ?? Constants::SUGAR_SOURCE_INFO[$type]['yan'];
+        $additive = filter_var(optionalParam($entry, 'additive', false), FILTER_VALIDATE_BOOLEAN);
+
+        if ($additive && $quantityAmount === null) {
+            throw new InvalidArgumentException("additionalSugars[{$i}]: quantityAmount is required when additive is true.");
+        }
+
+        $sugars[] = [
+            'type' => $type,
+            'quantity_amount' => $quantityAmount ?? 0.0,
+            'quantity_amount_specified' => $quantityAmount !== null,
+            'quantity_units' => $quantityUnits,
+            'sugar_content' => $sugarContent,
+            'yan_multiplier' => $yanMultiplier,
+            'additive' => $additive,
+        ];
+    }
+    return $sugars;
+}
+
 /**
  * Validates an optional SNA schedule: each element must be the string "pitch" (only as the
  * first element), the string "break", or a number in [1, 500].
@@ -334,6 +409,45 @@ $router->post('/api/v1/build-batch', function (array $p) {
         'fillFkFirst' => filter_var(optionalParam($p, 'fillFkFirst', true), FILTER_VALIDATE_BOOLEAN),
         'hot' => filter_var(optionalParam($p, 'hot', false), FILTER_VALIDATE_BOOLEAN),
         'snaScheduleOverride' => parseSnaSchedule(optionalParam($p, 'snaScheduleOverride')),
+    ]);
+});
+
+$router->post('/api/v1/calculate-mead', function (array $p) {
+    $units = parseUnits(optionalParam($p, 'units'));
+
+    return BatchCalculator::calculateMead([
+        'units' => $units,
+        'mustTemperature' => optionalNumeric($p, 'mustTemperature'),
+        'mustTemperatureUnits' => isset($p['mustTemperatureUnits']) ? parseTemperatureUnits((string) $p['mustTemperatureUnits']) : null,
+        'targetGravity' => optionalNumeric($p, 'targetGravity'),
+        'targetGravityUnits' => isset($p['targetGravityUnits']) ? parseGravityUnits((string) $p['targetGravityUnits']) : null,
+        'targetAbv' => optionalNumeric($p, 'targetAbv'),
+        'targetAbvUnits' => isset($p['targetAbvUnits']) ? parseAbvUnits((string) $p['targetAbvUnits']) : null,
+        'targetVolume' => optionalNumeric($p, 'targetVolume'),
+        'targetVolumeUnits' => isset($p['targetVolumeUnits']) ? parseVolumeUnits((string) $p['targetVolumeUnits']) : null,
+        'additionalSugars' => parseAdditionalSugars(optionalParam($p, 'additionalSugars')),
+        'currentGravity' => optionalNumeric($p, 'currentGravity'),
+        'currentGravityUnits' => isset($p['currentGravityUnits']) ? parseGravityUnits((string) $p['currentGravityUnits']) : null,
+        'currentVolume' => optionalNumeric($p, 'currentVolume'),
+        'currentVolumeUnits' => isset($p['currentVolumeUnits']) ? parseVolumeUnits((string) $p['currentVolumeUnits']) : null,
+        'targetStepFeedGravity' => optionalNumeric($p, 'targetStepFeedGravity'),
+        'yeastAbv' => optionalNumeric($p, 'yeastAbv') ?? 18.0,
+        'yanRequirement' => parseYanRequirement(optionalParam($p, 'yanRequirement')),
+        'hot' => filter_var(optionalParam($p, 'hot', false), FILTER_VALIDATE_BOOLEAN),
+        'calculateAdditiveHoney' => filter_var(optionalParam($p, 'calculateAdditiveHoney', false), FILTER_VALIDATE_BOOLEAN),
+        'fermOEffectiveness' => optionalNumeric($p, 'fermOEffectiveness') ?? 2.6,
+        'enforceLimits' => filter_var(optionalParam($p, 'enforceLimits', true), FILTER_VALIDATE_BOOLEAN),
+        'dapLimit' => optionalNumeric($p, 'dapLimit') ?? 0.96,
+        'fermKLimit' => optionalNumeric($p, 'fermKLimit') ?? 0.5,
+        'fermOLimit' => optionalNumeric($p, 'fermOLimit') ?? 0.45,
+        'yanRatioDap' => optionalNumeric($p, 'yanRatioDap') ?? 35.0,
+        'yanRatioFermK' => optionalNumeric($p, 'yanRatioFermK') ?? 25.0,
+        'yanRatioFermO' => optionalNumeric($p, 'yanRatioFermO') ?? 40.0,
+        'fermKYan' => optionalNumeric($p, 'fermKYan') ?? 134.0,
+        'gofermYan' => optionalNumeric($p, 'gofermYan') ?? 77.0,
+        'fillFkFirst' => filter_var(optionalParam($p, 'fillFkFirst', true), FILTER_VALIDATE_BOOLEAN),
+        'useGoferm' => filter_var(optionalParam($p, 'useGoferm', true), FILTER_VALIDATE_BOOLEAN),
+        'yeastPackGrams' => optionalNumeric($p, 'yeastPackGrams') ?? 5.0,
     ]);
 });
 

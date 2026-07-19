@@ -772,6 +772,198 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
 
+  /calculate-mead:
+    post:
+      tags: [Nutrients]
+      summary: Build a full recipe from a target gravity, volume, and/or ABV
+      description: >
+        Resolves a target OG/FG/ABV/volume — supply any two of target gravity, target volume, and
+        target ABV, and the third is solved for; when both target gravity and target volume are
+        given without a full sugar specification (or with one that leaves a sugar's amount
+        unspecified), the required sugar quantity is solved for instead. Supports optional step
+        feeding (`targetStepFeedGravity`), fruit/other-sugar YAN contribution via
+        `additionalSugars`, and Go-Ferm/nutrient-schedule computation. All parameters are
+        optional; defaults match MeadBot's `!calculate-mead` command. `additionalSugars` entries'
+        `sugarContent`/`yanMultiplier` default to the named sugar source's known values when
+        omitted.
+      operationId: calculateMead
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                units: { type: string, enum: [us, metric, imperial], default: us }
+                mustTemperature:
+                  type: number
+                  nullable: true
+                  description: Defaults to 68 (us/imperial) or 20 (metric).
+                mustTemperatureUnits:
+                  type: string
+                  enum: [celsius, fahrenheit]
+                  nullable: true
+                  description: Defaults to fahrenheit (us/imperial) or celsius (metric).
+                targetGravity:
+                  type: number
+                  nullable: true
+                  description: Defaults to 1.108 when neither targetVolume nor targetAbv resolve it.
+                targetGravityUnits: { type: string, enum: [sg, brix, baume], nullable: true, default: sg }
+                targetAbv:
+                  type: number
+                  nullable: true
+                  description: Defaults to 14.13 when not resolved from targetGravity/targetStepFeedGravity.
+                targetAbvUnits: { type: string, enum: [abv, abw], nullable: true, default: abv }
+                targetVolume:
+                  type: number
+                  nullable: true
+                  description: Defaults to 5 (us), 18.93 (metric), or 5 (imperial, in imperial gallons).
+                targetVolumeUnits:
+                  type: string
+                  nullable: true
+                  description: >
+                    Defaults to gallons_us/liters/gallons_imp matching units. Any name accepted by
+                    /volume-units/{name}.
+                additionalSugars:
+                  type: array
+                  nullable: true
+                  description: >
+                    Additional fruit/sugar sources contributing to gravity and/or YAN. At most one
+                    entry may omit quantityAmount (it will be solved for); entries with
+                    additive=true must specify quantityAmount.
+                  items:
+                    type: object
+                    required: [type, quantityUnits]
+                    properties:
+                      type:
+                        type: string
+                        example: honey
+                        description: Sugar source name, e.g. honey, blueberry, dried_apricots.
+                      quantityAmount:
+                        type: number
+                        nullable: true
+                        description: Omit to have this sugar's quantity solved for.
+                      quantityUnits:
+                        type: string
+                        example: lbs
+                        description: Any name accepted by GET /honey-units/{name}.
+                      sugarContent:
+                        type: number
+                        nullable: true
+                        description: Percent sugar by weight. Defaults to the sugar source's known value.
+                      yanMultiplier:
+                        type: number
+                        nullable: true
+                        description: Defaults to the sugar source's known value.
+                      additive:
+                        type: boolean
+                        default: false
+                        description: If true, this sugar's volume is added on top of targetVolume rather than being part of it.
+                currentGravity: { type: number, nullable: true, default: 1.0 }
+                currentGravityUnits: { type: string, enum: [sg, brix, baume], nullable: true, default: sg }
+                currentVolume: { type: number, nullable: true, default: 0 }
+                currentVolumeUnits:
+                  type: string
+                  nullable: true
+                  description: Defaults to gallons_us/liters/gallons_imp matching units.
+                targetStepFeedGravity:
+                  type: number
+                  nullable: true
+                  description: >
+                    If set, must be greater than the resolved targetGravity; enables step feeding
+                    and overrides targetAbv (derived from this value instead).
+                yeastAbv: { type: number, default: 18, description: The yeast's expected %ABV tolerance. }
+                yanRequirement:
+                  type: string
+                  enum: [very_low, low, medium, high, kveik]
+                  default: medium
+                hot:
+                  type: boolean
+                  default: false
+                  description: Whether fermenting hot (affects the default SNA schedule).
+                calculateAdditiveHoney:
+                  type: boolean
+                  default: false
+                  description: >
+                    When no additionalSugars are given and both targetGravity and targetVolume are
+                    specified, solve for how much honey to add on top of targetVolume rather than
+                    how much of targetVolume should be honey.
+                fermOEffectiveness: { type: number, default: 2.6 }
+                enforceLimits: { type: boolean, default: true }
+                dapLimit: { type: number, default: 0.96, description: g/L. }
+                fermKLimit: { type: number, default: 0.5, description: g/L. }
+                fermOLimit: { type: number, default: 0.45, description: g/L. }
+                yanRatioDap: { type: number, default: 35 }
+                yanRatioFermK: { type: number, default: 25 }
+                yanRatioFermO: { type: number, default: 40 }
+                fermKYan: { type: number, default: 134, description: ppm YAN provided by the Fermaid K product in use. }
+                gofermYan: { type: number, default: 77, description: ppm YAN provided by the Go-Ferm product in use. }
+                fillFkFirst: { type: boolean, default: true }
+                useGoferm: { type: boolean, default: true }
+                yeastPackGrams: { type: number, default: 5 }
+      responses:
+        '200':
+          description: Full recipe.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      mustTemperature: { type: number }
+                      mustTemperatureUnits: { type: integer }
+                      targetGravity: { type: number }
+                      targetGravityUnits: { type: integer }
+                      targetStepFeedGravity: { type: number, nullable: true }
+                      targetFinalGravity:
+                        type: number
+                        description: The resolved FG, expressed in targetGravityUnits.
+                      targetAbv: { type: number }
+                      targetAbvUnits: { type: integer }
+                      targetVolume: { type: number }
+                      targetVolumeUnits: { type: integer }
+                      stepFeeding:
+                        type: object
+                        nullable: true
+                        description: Present only when targetStepFeedGravity was given.
+                        properties:
+                          volumeAfterSteps: { type: number }
+                          honeyVolsPerStep: { type: number }
+                          numberOfSteps: { type: integer }
+                          stepAddSg: { type: number }
+                      currentGravity: { type: number }
+                      currentGravityUnits: { type: integer }
+                      currentGravitySpecified: { type: boolean }
+                      currentVolume: { type: number }
+                      currentVolumeUnits: { type: integer }
+                      currentVolumeSpecified: { type: boolean }
+                      additionalSugars:
+                        type: array
+                        nullable: true
+                        description: >
+                          Echoes the request's additionalSugars, with any solved-for
+                          quantityAmount filled in.
+                        items:
+                          type: object
+                      goferm:
+                        type: object
+                        properties:
+                          minGrams: { type: number }
+                          numPackets: { type: integer }
+                          grams: { type: number }
+                          dilutionWaterMl: { type: number }
+                          yeastPackGrams: { type: number }
+                      gofermYanContribution: { type: number }
+                      fruitYanContribution: { type: number }
+                      nutrients:
+                        type: object
+                        description: Same shape as /calculate-nutrients' response (minus gofermYanContribution).
+                      break3:
+                        type: number
+                        description: The 1/3 sugar break gravity, used to label the corresponding addition.
+        '400':
+          $ref: '#/components/responses/Error'
+
   /sugar-sources/{name}:
     get:
       tags: [Sugar sources]

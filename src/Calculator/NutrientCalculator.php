@@ -439,9 +439,14 @@ final class NutrientCalculator
                 $dapYan = 0.0;
             }
 
-            $yanRatioFermK = ceil(($fkYan / $yan) * 1000) / 1000;
-            $yanRatioFermO = ceil(($foYan / $yan) * 1000) / 1000;
-            $yanRatioDap = ceil(($dapYan / $yan) * 1000) / 1000;
+            // JS divides by $yan unconditionally here; a $yan of exactly 0 (no nitrogen needed at
+            // all — e.g. calculate-mead with a target gravity equal to the current gravity)
+            // produces 0/0 = NaN there, which JSON.stringify serializes as null. PHP's `/`
+            // throws DivisionByZeroError instead, so mirror the same "null when there was nothing
+            // to divide" result explicitly rather than crashing.
+            $yanRatioFermK = $yan === 0.0 ? null : ceil(($fkYan / $yan) * 1000) / 1000;
+            $yanRatioFermO = $yan === 0.0 ? null : ceil(($foYan / $yan) * 1000) / 1000;
+            $yanRatioDap = $yan === 0.0 ? null : ceil(($dapYan / $yan) * 1000) / 1000;
         } else {
             $debug = 'custom limits';
             $dapYan = self::getYanRatio($yan, $dapR, $rt);

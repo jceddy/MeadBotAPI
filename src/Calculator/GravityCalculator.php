@@ -78,6 +78,75 @@ final class GravityCalculator
         };
     }
 
+    // convert a volume value in the given units to liters
+    public static function toVol(int $units, float $volume): float
+    {
+        return $volume * Constants::VOLUME_UNIT_INFO[$units]['conversion'];
+    }
+
+    public static function getTempCoeff(float $temp, int $units): float
+    {
+        $celsius = $temp;
+        if ($units === Constants::TEMPERATURE_UNIT_FAHRENHEIT) {
+            $celsius = (5 * ($celsius - 32)) / 9;
+        }
+        return -0.00469615 + 0.000377273 * $celsius - 0.0000117144 * $celsius ** 2 + 0.000000229558 * $celsius ** 3;
+    }
+
+    // sugar concentration (g/L) corresponding to a given SG
+    public static function sgToSugarConc(float $sg): float
+    {
+        return 4 + 10 * $sg * CalculatorApi::convertSGToBrix($sg);
+    }
+
+    // SG corresponding to a given sugar concentration (g/L), via numeric search
+    public static function sugarConcToSG(float $gPerL): float
+    {
+        $sg = 0.992;
+        $loopLimit = 100000;
+
+        for ($i = 0; $i < $loopLimit; $i++) {
+            $gpl = self::sgToSugarConc($sg);
+            if (round($gpl) === round($gPerL)) {
+                return $sg < 1 ? 1.0 : $sg;
+            }
+            $diff = 10 ** (-1 * (2 + strlen((string) (int) round($gpl)))) / 3;
+            $sg = $sg * (1 + $diff);
+        }
+        return NAN;
+    }
+
+    /**
+     * Total sugar (g) contributed by an additional-sugar entry
+     * { quantity_amount, quantity_units, sugar_content } (quantity in HONEY_UNIT_*, sugar_content
+     * as a percent).
+     *
+     * @param array{quantity_amount: float, quantity_units: int, sugar_content: float} $sugar
+     */
+    public static function getSugars(array $sugar): float
+    {
+        return ($sugar['quantity_amount'] * Constants::HONEY_UNIT_INFO[$sugar['quantity_units']]['conversion'] * $sugar['sugar_content']) / 100;
+    }
+
+    public static function volumeUnitsToHoneyUnits(int $unit): ?int
+    {
+        return match ($unit) {
+            Constants::VOLUME_UNIT_LITERS => Constants::HONEY_UNIT_LITERS,
+            Constants::VOLUME_UNIT_GALLONS_US => Constants::HONEY_UNIT_GALLONS_US,
+            Constants::VOLUME_UNIT_GALLONS_IMP => Constants::HONEY_UNIT_GALLONS_IMP,
+            Constants::VOLUME_UNIT_CUPS_US => Constants::HONEY_UNIT_CUPS_US,
+            Constants::VOLUME_UNIT_CUPS_IMP => Constants::HONEY_UNIT_CUPS_IMP,
+            Constants::VOLUME_UNIT_CUPS_METRIC => Constants::HONEY_UNIT_CUPS_METRIC,
+            Constants::VOLUME_UNIT_FL_OUNCES_US => Constants::HONEY_UNIT_FL_OUNCES_US,
+            Constants::VOLUME_UNIT_FL_OUNCES_IMP => Constants::HONEY_UNIT_FL_OUNCES_IMP,
+            Constants::VOLUME_UNIT_PINTS_US => Constants::HONEY_UNIT_PINTS_US,
+            Constants::VOLUME_UNIT_PINTS_IMP => Constants::HONEY_UNIT_PINTS_IMP,
+            Constants::VOLUME_UNIT_QUARTS_US => Constants::HONEY_UNIT_QUARTS_US,
+            Constants::VOLUME_UNIT_QUARTS_IMP => Constants::HONEY_UNIT_QUARTS_IMP,
+            default => null,
+        };
+    }
+
     // functions adapted from Storm's mead-nutrient-calculation spreadsheet
     public static function stormABVtoSG(float $abv): float
     {
