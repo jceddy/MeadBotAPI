@@ -52,6 +52,24 @@ final class Constants
         self::VOLUME_UNIT_CUPS_METRIC => ['name' => 'Cup(s) Metric', 'conversion' => 0.25],
     ];
 
+    // canonical (non-alias) slug for each volume unit, matching MeadBot's VOLUME_UNITS keys
+    // lowercased — used by CalculatorApi::listVolumeUnits(), not by getVolumeUnit() (which
+    // additionally accepts many aliases per unit)
+    public const VOLUME_UNIT_SLUGS = [
+        self::VOLUME_UNIT_LITERS => 'liters',
+        self::VOLUME_UNIT_GALLONS_US => 'gallons_us',
+        self::VOLUME_UNIT_GALLONS_IMP => 'gallons_imp',
+        self::VOLUME_UNIT_FL_OUNCES_US => 'fl_ounces_us',
+        self::VOLUME_UNIT_FL_OUNCES_IMP => 'fl_ounces_imp',
+        self::VOLUME_UNIT_PINTS_US => 'pints_us',
+        self::VOLUME_UNIT_PINTS_IMP => 'pints_imp',
+        self::VOLUME_UNIT_QUARTS_US => 'quarts_us',
+        self::VOLUME_UNIT_QUARTS_IMP => 'quarts_imp',
+        self::VOLUME_UNIT_CUPS_US => 'cups_us',
+        self::VOLUME_UNIT_CUPS_IMP => 'cups_imp',
+        self::VOLUME_UNIT_CUPS_METRIC => 'cups_metric',
+    ];
+
     // honey unit identifiers
     public const HONEY_UNIT_KILOGRAMS = 0;
     public const HONEY_UNIT_POUNDS = 1;
@@ -165,6 +183,39 @@ final class Constants
         self::YAN_REQUIREMENT_MEDIUM => 'Medium',
         self::YAN_REQUIREMENT_HIGH => 'High',
         self::YAN_REQUIREMENT_KVEIK => 'Kveik',
+    ];
+
+    // (incomplete) list of YAN requirements for different yeasts
+    public const YAN_REQUIREMENT_BY_YEAST = [
+        'Lalvin 71B' => self::YAN_REQUIREMENT_LOW,
+        'Lalvin BA 11' => self::YAN_REQUIREMENT_HIGH,
+        'Lalvin BM45' => self::YAN_REQUIREMENT_MEDIUM,
+        'Lalvin BM4X4' => self::YAN_REQUIREMENT_HIGH,
+        'Lalvin CLOS' => self::YAN_REQUIREMENT_MEDIUM,
+        'Lalvin CY3079' => self::YAN_REQUIREMENT_HIGH,
+        'Lalvin D21' => self::YAN_REQUIREMENT_LOW,
+        'Lalvin D254' => self::YAN_REQUIREMENT_MEDIUM,
+        'Lalvin D80' => self::YAN_REQUIREMENT_MEDIUM,
+        'Lalvin DV10' => self::YAN_REQUIREMENT_LOW,
+        'Lalvin EC-1118 (OG >= 1.120)' => self::YAN_REQUIREMENT_MEDIUM,
+        'Lalvin EC-1118 (OG < 1.120)' => self::YAN_REQUIREMENT_LOW,
+        'Lalvin K1V-1116' => self::YAN_REQUIREMENT_MEDIUM,
+        'Lalvin QA23' => self::YAN_REQUIREMENT_LOW,
+        'Lalvin R2' => self::YAN_REQUIREMENT_MEDIUM,
+        'Lalvin RC212' => self::YAN_REQUIREMENT_MEDIUM,
+        'Lalvin Rhone 2226' => self::YAN_REQUIREMENT_HIGH,
+        'Red Star Cote Des Blancs' => self::YAN_REQUIREMENT_HIGH,
+        'Red Star Montrachet' => self::YAN_REQUIREMENT_LOW,
+        'Red Star Pasteur Champange' => self::YAN_REQUIREMENT_LOW,
+        'Red Star Pasteur Red' => self::YAN_REQUIREMENT_MEDIUM,
+        'Red Star Premier Cuvee' => self::YAN_REQUIREMENT_MEDIUM,
+        'Uvaferm 43' => self::YAN_REQUIREMENT_LOW,
+        'Uvaferm BDX' => self::YAN_REQUIREMENT_MEDIUM,
+        'Uvaferm SVG' => self::YAN_REQUIREMENT_MEDIUM,
+        'Uvaferm VRB' => self::YAN_REQUIREMENT_MEDIUM,
+        'Viti Levur 58W3' => self::YAN_REQUIREMENT_LOW,
+        'Ale/Lager Yeast' => self::YAN_REQUIREMENT_LOW,
+        'Kveik' => self::YAN_REQUIREMENT_KVEIK,
     ];
 
     // nutrient factors for extra low/low/medium/high/kveik requirements

@@ -283,6 +283,8 @@ $router->post('/api/v1/dry-fg', function (array $p) {
 });
 
 // Volume units / conversion
+$router->get('/api/v1/volume-units', fn () => ['error' => false, 'volumeUnits' => CalculatorApi::listVolumeUnits()]);
+
 $router->get('/api/v1/volume-units/{name}', fn (array $p) => lookupResult(
     CalculatorApi::getVolumeUnit($p['name']),
     'Unknown volume unit: ' . $p['name']
@@ -450,6 +452,11 @@ $router->post('/api/v1/calculate-mead', function (array $p) {
         'yeastPackGrams' => optionalNumeric($p, 'yeastPackGrams') ?? 5.0,
     ]);
 });
+
+$router->get('/api/v1/yeast-requirements', fn () => [
+    'error' => false,
+    'yeastRequirements' => CalculatorApi::listYeastRequirements(),
+]);
 
 // Sugar sources
 $router->get('/api/v1/sugar-sources/{name}', function (array $p) {

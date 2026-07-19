@@ -76,6 +76,7 @@ route called with the wrong HTTP method, and `200` otherwise.
 | POST | `/api/v1/abv` | `og`, `fg` (optional — estimated "dry" FG is used if omitted) | `CalculateABV` |
 | POST | `/api/v1/gravity-drop-to-abv` | `sgDelta` | `ConvertGravityDropToABV` |
 | POST | `/api/v1/dry-fg` | `og` | `EstimateDryFG` |
+| GET | `/api/v1/volume-units` | — | `!list-volume-units` |
 | GET | `/api/v1/volume-units/{name}` | — | `GetVolumeUnit` |
 | POST | `/api/v1/volume/convert` | `amount`, `fromUnit`, `toUnit` | `ConvertVolume` |
 | GET | `/api/v1/honey-units/{name}` | — | `GetHoneyUnit` |
@@ -88,6 +89,7 @@ route called with the wrong HTTP method, and `200` otherwise.
 | POST | `/api/v1/calculate-nutrients` | All optional — `units`, `volume`, `yan`, and various nutrient-limit/ratio overrides (see [docs](#api-docs)) | `!calculate-nutrients` |
 | POST | `/api/v1/build-batch` | All optional — `units`, `volume`, `yeastAbv`, `nutrientRegimen`, and many more (see [docs](#api-docs)) | `!build-batch` |
 | POST | `/api/v1/calculate-mead` | All optional — `units`, `targetGravity`/`targetVolume`/`targetAbv` (any two solve the third), `additionalSugars`, and many more (see [docs](#api-docs)) | `!calculate-mead` |
+| GET | `/api/v1/yeast-requirements` | — | `!list-yeast-requirements` |
 | GET | `/api/v1/sugar-sources/{name}` | — | `GetSugarSourceIdentifier` |
 | POST | `/api/v1/dates/days-between` | `date1`, `date2` (parseable date/time strings) | `GetDaysBetween` |
 | POST | `/api/v1/dates/months-between` | `date1`, `date2`, `roundUpFractionalMonths` (optional bool) | `GetMonthsBetween` |

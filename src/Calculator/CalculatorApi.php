@@ -589,4 +589,33 @@ final class CalculatorApi
         }
         return $timing . ' Hours';
     }
+
+    /**
+     * listVolumeUnits() - list all recognized volume unit names paired with their display name.
+     *
+     * @return array<int, array{unit: string, name: string}>
+     */
+    public static function listVolumeUnits(): array
+    {
+        $list = [];
+        foreach (Constants::VOLUME_UNIT_SLUGS as $id => $slug) {
+            $list[] = ['unit' => $slug, 'name' => Constants::VOLUME_UNIT_INFO[$id]['name']];
+        }
+        return $list;
+    }
+
+    /**
+     * listYeastRequirements() - list known yeasts paired with their human-readable YAN
+     * requirement.
+     *
+     * @return array<int, array{yeast: string, requirement: string}>
+     */
+    public static function listYeastRequirements(): array
+    {
+        $list = [];
+        foreach (Constants::YAN_REQUIREMENT_BY_YEAST as $yeast => $requirement) {
+            $list[] = ['yeast' => $yeast, 'requirement' => Constants::YAN_REQUIREMENT_STRING[$requirement]];
+        }
+        return $list;
+    }
 }

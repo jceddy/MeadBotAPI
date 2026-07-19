@@ -206,6 +206,33 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
 
+  /volume-units:
+    get:
+      tags: [Volume]
+      summary: List all recognized volume unit names
+      description: >
+        Lists the canonical (non-alias) name for each volume unit alongside its display name.
+        /volume-units/{name} additionally accepts many alias spellings not listed here (e.g.
+        `gal`, `gallon`, `gallons` all resolve to `gallons_us`).
+      operationId: listVolumeUnits
+      responses:
+        '200':
+          description: Volume units.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      volumeUnits:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            unit: { type: string, example: gallons_us }
+                            name: { type: string, example: Gallon(s) US }
+
   /volume-units/{name}:
     get:
       tags: [Volume]
@@ -963,6 +990,31 @@ paths:
                         description: The 1/3 sugar break gravity, used to label the corresponding addition.
         '400':
           $ref: '#/components/responses/Error'
+
+  /yeast-requirements:
+    get:
+      tags: [Nutrients]
+      summary: List known yeasts and their YAN requirement
+      operationId: listYeastRequirements
+      responses:
+        '200':
+          description: Yeast YAN requirements.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      yeastRequirements:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            yeast: { type: string, example: Lalvin 71B }
+                            requirement:
+                              type: string
+                              enum: [Very Low, Low, Medium, High, Kveik]
 
   /sugar-sources/{name}:
     get:
