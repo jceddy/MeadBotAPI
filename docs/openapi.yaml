@@ -1,0 +1,633 @@
+openapi: 3.0.3
+info:
+  title: MeadBotAPI
+  description: >
+    REST API for MeadBot's mead-brewing calculator functionality — a PHP port of the pure
+    calculation functions exported by `CalculatorAPI.js` in the MeadBot Discord bot.
+
+
+    All calculation endpoints return a JSON object with an `error` boolean. When `error` is
+    `true`, the response also includes `errorMessage` and usually `errorArgument`,
+    `errorArgumentPosition`, `errorType`, and `errorTypeLabel`, and the HTTP status is `400`.
+    Calling an unregistered path returns `404`; calling a registered path with the wrong HTTP
+    method returns `405` — both with the same `{error, errorMessage}` envelope.
+  version: '1.0'
+  license:
+    name: GPL-3.0-only
+    url: https://www.gnu.org/licenses/gpl-3.0.html
+servers:
+  - url: /api/v1
+tags:
+  - name: Gravity & ABV
+  - name: Calories
+  - name: Volume
+  - name: Honey
+  - name: Temperature
+  - name: Sugar sources
+  - name: Dates
+  - name: Misc
+
+paths:
+  /health:
+    get:
+      tags: [Misc]
+      summary: Health check
+      operationId: health
+      responses:
+        '200':
+          description: Service is up.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: boolean
+                    example: false
+                  status:
+                    type: string
+                    example: ok
+
+  /calories:
+    post:
+      tags: [Calories]
+      summary: Estimate the caloric content of a beverage
+      operationId: calculateCalories
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [percentAlcohol, fg, bottleVolume, servingVolume]
+              properties:
+                percentAlcohol:
+                  type: number
+                  description: Percentage of alcohol by volume (e.g. `11.5` = 11.5% ABV). Range 0-100.
+                  example: 12
+                fg:
+                  type: number
+                  description: Final/specific gravity of the beverage. Range 0.99-1.2.
+                  example: 1.0
+                bottleVolume:
+                  type: number
+                  description: Milliliters in a bottle of the beverage. Range 100-5000.
+                  example: 750
+                servingVolume:
+                  type: number
+                  description: Milliliters in a serving of the beverage. Range 10-1000.
+                  example: 150
+      responses:
+        '200':
+          description: Calorie estimate.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      percentAlcohol: { type: number }
+                      fg: { type: number }
+                      alcoholGramsLiter: { type: number }
+                      alcoholCalories: { type: number }
+                      bottleVolume: { type: number }
+                      servingVolume: { type: number }
+                      residualSugar: { type: number }
+                      residualCalories: { type: number }
+                      totalCaloriesBottle: { type: number }
+                      totalCalories250: { type: number }
+                      totalCaloriesServing: { type: number }
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /abv:
+    post:
+      tags: [Gravity & ABV]
+      summary: Calculate estimated %ABV from an original and final gravity
+      description: >
+        If `fg` is omitted, an estimated "dry" final gravity is used in its place.
+      operationId: calculateABV
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [og]
+              properties:
+                og:
+                  type: number
+                  description: Original gravity. Range 0.99-1.4.
+                  example: 1.1
+                fg:
+                  type: number
+                  nullable: true
+                  description: Final gravity. Range 0.99-1.2. Omit to estimate a "dry" FG.
+                  example: 1.0
+      responses:
+        '200':
+          description: ABV estimate.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      og: { type: number }
+                      fg: { type: number }
+                      abv: { type: number }
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /gravity-drop-to-abv:
+    post:
+      tags: [Gravity & ABV]
+      summary: Convert a gravity drop to a %ABV estimate
+      operationId: convertGravityDropToABV
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sgDelta]
+              properties:
+                sgDelta:
+                  type: number
+                  description: The gravity drop (e.g. OG - FG + 1).
+                  example: 1.1
+      responses:
+        '200':
+          description: ABV estimate.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      sgDelta: { type: number }
+                      abv: { type: number }
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /dry-fg:
+    post:
+      tags: [Gravity & ABV]
+      summary: Estimate the "dry" final gravity from an original gravity
+      operationId: estimateDryFG
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [og]
+              properties:
+                og:
+                  type: number
+                  example: 1.1
+      responses:
+        '200':
+          description: Estimated dry FG.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      og: { type: number }
+                      fg: { type: number }
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /volume-units/{name}:
+    get:
+      tags: [Volume]
+      summary: Look up a volume unit identifier by name
+      operationId: getVolumeUnit
+      parameters:
+        - $ref: '#/components/parameters/UnitName'
+      responses:
+        '200':
+          description: Unit found.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      unitId: { type: integer }
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /volume/convert:
+    post:
+      tags: [Volume]
+      summary: Convert a volume from one unit to another
+      operationId: convertVolume
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, fromUnit, toUnit]
+              properties:
+                amount: { type: number, example: 1 }
+                fromUnit: { type: string, example: gallon }
+                toUnit: { type: string, example: liters }
+      responses:
+        '200':
+          description: Converted volume.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      fromAmount: { type: number }
+                      fromUnit: { $ref: '#/components/schemas/UnitInfo' }
+                      toAmount: { type: number }
+                      toUnit: { $ref: '#/components/schemas/UnitInfo' }
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /honey-units/{name}:
+    get:
+      tags: [Honey]
+      summary: Look up a honey unit identifier by name
+      operationId: getHoneyUnit
+      parameters:
+        - $ref: '#/components/parameters/UnitName'
+      responses:
+        '200':
+          description: Unit found.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      unitId: { type: integer }
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /honey/convert:
+    post:
+      tags: [Honey]
+      summary: Convert an amount of honey from one unit to another
+      operationId: convertHoneyUnits
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, fromUnit, toUnit]
+              properties:
+                amount: { type: number, example: 1 }
+                fromUnit: { type: string, example: kg }
+                toUnit: { type: string, example: lbs }
+      responses:
+        '200':
+          description: Converted amount.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      fromAmount: { type: number }
+                      fromUnit: { $ref: '#/components/schemas/UnitInfo' }
+                      toAmount: { type: number }
+                      toUnit: { $ref: '#/components/schemas/UnitInfo' }
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /temperature/convert:
+    post:
+      tags: [Temperature]
+      summary: Convert a temperature between Celsius and Fahrenheit
+      operationId: convertTemperature
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fromTemperature, fromUnit]
+              properties:
+                fromTemperature: { type: number, example: 100 }
+                fromUnit:
+                  type: string
+                  description: One of `c`, `celcius`, `f`, `fahrenheit`.
+                  example: c
+      responses:
+        '200':
+          description: Converted temperature.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      fromTemperature: { type: number }
+                      fromUnit: { type: string }
+                      toTemperature: { type: number }
+                      toUnit: { type: string }
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /sg-to-brix:
+    post:
+      tags: [Gravity & ABV]
+      summary: Convert a specific gravity to BRIX
+      operationId: convertSGToBrix
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sg]
+              properties:
+                sg: { type: number, example: 1.09 }
+      responses:
+        '200':
+          description: BRIX value.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      sg: { type: number }
+                      brix: { type: number }
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /delle:
+    post:
+      tags: [Gravity & ABV]
+      summary: Compute an estimated Delle number
+      operationId: computeDelle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [abv, sg]
+              properties:
+                abv: { type: number, example: 12.5 }
+                sg: { type: number, example: 0.998 }
+      responses:
+        '200':
+          description: Delle number.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      abv: { type: number }
+                      sg: { type: number }
+                      delle: { type: number }
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /sugar-sources/{name}:
+    get:
+      tags: [Sugar sources]
+      summary: Look up a sugar source identifier by name
+      operationId: getSugarSourceIdentifier
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Sugar source name, e.g. `honey`, `blueberry`, `dried_apricots`.
+          schema:
+            type: string
+          example: honey
+      responses:
+        '200':
+          description: Sugar source found.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      unitId: { type: integer }
+                      sugarSource:
+                        type: object
+                        properties:
+                          name: { type: string }
+                          percent: { type: number }
+                          yan: { type: number }
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /dates/days-between:
+    post:
+      tags: [Dates]
+      summary: Calculate the number of full days between two dates
+      operationId: getDaysBetween
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date1, date2]
+              properties:
+                date1: { type: string, format: date-time, example: '2024-01-01T00:00:00Z' }
+                date2: { type: string, format: date-time, example: '2024-01-10T00:00:00Z' }
+      responses:
+        '200':
+          description: Days between the two dates.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      daysBetween: { type: number }
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /dates/months-between:
+    post:
+      tags: [Dates]
+      summary: Calculate the number of months between two dates
+      operationId: getMonthsBetween
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date1, date2]
+              properties:
+                date1: { type: string, format: date-time, example: '2024-01-01T00:00:00Z' }
+                date2: { type: string, format: date-time, example: '2024-03-15T00:00:00Z' }
+                roundUpFractionalMonths:
+                  type: boolean
+                  default: false
+                  description: If true, a fractional trailing month rounds up to a full month.
+      responses:
+        '200':
+          description: Months between the two dates.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      monthsBetween: { type: integer }
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /random:
+    get:
+      tags: [Misc]
+      summary: Generate a random integer in the range [0, max)
+      operationId: randomInteger
+      parameters:
+        - name: max
+          in: query
+          required: true
+          schema:
+            type: integer
+          example: 10
+      responses:
+        '200':
+          description: Random integer.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      max: { type: integer }
+                      value: { type: integer }
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /hours-string:
+    post:
+      tags: [Misc]
+      summary: Build a human-readable string from SNA timing information
+      operationId: makeHoursString
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [timing]
+              properties:
+                timing:
+                  type: string
+                  description: >
+                    `"pitch"`, `"break"`, an `"hours,additionIndex"` pair (e.g. `"24,1"`), or a
+                    plain number of hours (e.g. `"48"`).
+                  example: '24,1'
+                break3:
+                  type: number
+                  nullable: true
+                  description: The 1/3 sugar break SG. Required only when `timing` is `"break"`.
+      responses:
+        '200':
+          description: Human-readable timing string.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      timing: { type: string }
+                      hoursString: { type: string }
+        '400':
+          $ref: '#/components/responses/Error'
+
+components:
+  parameters:
+    UnitName:
+      name: name
+      in: path
+      required: true
+      description: Unit name, e.g. `gallon`, `liters`, `kg`, `lbs`.
+      schema:
+        type: string
+      example: gallon
+
+  schemas:
+    SuccessFlag:
+      type: object
+      properties:
+        error:
+          type: boolean
+          example: false
+
+    UnitInfo:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Gallon(s) US
+        conversion:
+          type: number
+          description: Multiplier to convert an amount in this unit to the module's base unit.
+          example: 3.7854117891
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: boolean
+          example: true
+        errorMessage:
+          type: string
+          example: 'og nope is not a number.'
+        errorArgument:
+          type: string
+          nullable: true
+          example: og
+        errorArgumentPosition:
+          type: integer
+          nullable: true
+          example: 0
+        errorType:
+          type: integer
+          nullable: true
+          description: '0 = unknown, 1 = isNaN, 2 = range, 3 = invalid arguments.'
+          example: 1
+        errorTypeLabel:
+          type: string
+          nullable: true
+          example: isNaN
+
+  responses:
+    Error:
+      description: The request could not be processed (validation failure, out-of-range value, or unknown unit/name).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
