@@ -26,7 +26,8 @@ composer run serve
 ```
 
 This starts PHP's built-in server on `http://localhost:8000`, serving `public/` as the document
-root. For production, point your web server's document root at `public/` (an `.htaccess` is
+root — the API under `/api/v1` and interactive docs at `/docs` (see [API docs](#api-docs)
+below). For production, point your web server's document root at `public/` (an `.htaccess` is
 included for Apache + `mod_rewrite`; for nginx, route unmatched requests to `index.php`).
 
 ## Deployment
@@ -40,18 +41,12 @@ directory, since `public/index.php` loads `vendor/` and `src/` via paths relativ
 
 ## API docs
 
-`docs/openapi.yaml` is an OpenAPI 3.0 spec covering every endpoint below, and `docs/index.html`
-renders it as interactive Swagger UI. The `swagger-ui-dist` assets are vendored under
-`docs/vendor/swagger-ui/` (not loaded from a CDN), so the docs page works offline and isn't
-subject to a third party's availability.
-
-```
-composer run docs
-```
-
-Then open `http://localhost:8080`. (Swagger UI fetches `openapi.yaml` over HTTP, so serve
-`docs/` rather than opening `index.html` directly as a `file://` URL — browsers block that
-fetch.)
+`public/docs/openapi.yaml` is an OpenAPI 3.0 spec covering every endpoint below, and
+`public/docs/index.html` renders it as interactive Swagger UI at `/docs` — since it lives under
+`public/`, it's served automatically by `composer run serve` locally and is reachable at
+`/docs` on the deployed API too. The `swagger-ui-dist` assets are vendored under
+`public/docs/vendor/swagger-ui/` (not loaded from a CDN), so the docs page works offline and
+isn't subject to a third party's availability.
 
 ## Tests
 
@@ -120,4 +115,4 @@ curl -s http://localhost:8000/api/v1/volume/convert \
   from `CalculatorAPI.Constants.js`.
 - `src/Http/Router.php` - a minimal method+path router used by `public/index.php`.
 - `tests/` - PHPUnit tests, run with `composer test`.
-- `docs/openapi.yaml` / `docs/index.html` - OpenAPI spec and Swagger UI, run with `composer run docs`.
+- `public/docs/` - OpenAPI spec and Swagger UI, served at `/docs`.
