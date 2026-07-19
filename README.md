@@ -38,6 +38,21 @@ server root, using the repository secrets `FTP_HOST`, `FTP_USERNAME`, and `FTP_P
 assumes the web server's document root points at the `public/` subfolder of that upload
 directory, since `public/index.php` loads `vendor/` and `src/` via paths relative to itself.
 
+## API docs
+
+`docs/openapi.yaml` is an OpenAPI 3.0 spec covering every endpoint below, and `docs/index.html`
+renders it as interactive Swagger UI. The `swagger-ui-dist` assets are vendored under
+`docs/vendor/swagger-ui/` (not loaded from a CDN), so the docs page works offline and isn't
+subject to a third party's availability.
+
+```
+composer run docs
+```
+
+Then open `http://localhost:8080`. (Swagger UI fetches `openapi.yaml` over HTTP, so serve
+`docs/` rather than opening `index.html` directly as a `file://` URL — browsers block that
+fetch.)
+
 ## Tests
 
 ```
@@ -105,3 +120,4 @@ curl -s http://localhost:8000/api/v1/volume/convert \
   from `CalculatorAPI.Constants.js`.
 - `src/Http/Router.php` - a minimal method+path router used by `public/index.php`.
 - `tests/` - PHPUnit tests, run with `composer test`.
+- `docs/openapi.yaml` / `docs/index.html` - OpenAPI spec and Swagger UI, run with `composer run docs`.

@@ -21,6 +21,7 @@
     },
     "scripts": {
         "test": "phpunit",
-        "serve": "php -S 0.0.0.0:8000 -t public"
+        "serve": "php -S 0.0.0.0:8000 -t public",
+        "docs": "php -S 0.0.0.0:8080 -t docs"
     }
 }
