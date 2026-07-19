@@ -88,6 +88,14 @@ final class GravityCalculator
         return $sgDelta;
     }
 
+    public static function stormSGtoYAN(float $sgDelta, int $yanRequirement): float
+    {
+        return (143.254 * $sgDelta ** 3 - 648.67 * $sgDelta ** 2 + 1125.805 * $sgDelta - 620.389)
+            * 10
+            * $sgDelta
+            * Constants::NUTRIENT_FACTOR[$yanRequirement];
+    }
+
     /**
      * potentialAlcohol(...) - given up to two of {og, fg, abv} (each already expressed in the
      * requested gravityUnits/abvUnits), solve for whichever value(s) are needed to produce a

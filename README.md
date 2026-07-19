@@ -86,6 +86,7 @@ route called with the wrong HTTP method, and `200` otherwise.
 | POST | `/api/v1/potential-alcohol` | `gravityUnits`, `abvUnits`, and at least one of `og`/`fg`/`abv` (see [docs](#api-docs) for the solve priority) | `!potential-alcohol`\* |
 | POST | `/api/v1/calculate-blend` | `fieldToCalculate` and 4-5 of `value1`/`value2`/`blendedValue`/`volume1`/`volume2`/`totalVolume` (see [docs](#api-docs)) | `!calculate-blend` |
 | POST | `/api/v1/calculate-nutrients` | All optional — `units`, `volume`, `yan`, and various nutrient-limit/ratio overrides (see [docs](#api-docs)) | `!calculate-nutrients` |
+| POST | `/api/v1/build-batch` | All optional — `units`, `volume`, `yeastAbv`, `nutrientRegimen`, and many more (see [docs](#api-docs)) | `!build-batch` |
 | GET | `/api/v1/sugar-sources/{name}` | — | `GetSugarSourceIdentifier` |
 | POST | `/api/v1/dates/days-between` | `date1`, `date2` (parseable date/time strings) | `GetDaysBetween` |
 | POST | `/api/v1/dates/months-between` | `date1`, `date2`, `roundUpFractionalMonths` (optional bool) | `GetMonthsBetween` |
@@ -126,6 +127,8 @@ curl -s http://localhost:8000/api/v1/volume/convert \
   `BlendCalculator.js`.
 - `src/Calculator/NutrientCalculator.php` - the SNA nutrient-schedule solver, ported from
   `NutrientCalculator.js`.
+- `src/Calculator/BatchCalculator.php` - full-recipe (honey/yeast/nutrients) orchestration,
+  ported from `BatchCalculator.js`.
 - `src/Calculator/Constants.php` - unit tables, error-type codes, and sugar-source data, ported
   from `CalculatorAPI.Constants.js`.
 - `src/Http/Router.php` - a minimal method+path router used by `public/index.php`.

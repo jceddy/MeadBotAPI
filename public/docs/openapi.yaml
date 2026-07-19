@@ -632,6 +632,146 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
 
+  /build-batch:
+    post:
+      tags: [Nutrients]
+      summary: Build a full recipe (honey, yeast, nutrients) for a target batch
+      description: >
+        Resolves a target OG/FG/ABV, picks an SNA schedule (or uses `snaScheduleOverride`),
+        applies any fruit/grain YAN contribution, computes the honey weight and yeast/Go-Ferm
+        requirements, and splits nutrients across whichever `nutrientRegimen` was selected. All
+        parameters are optional; defaults match MeadBot's `!build-batch` command. `advanced*`,
+        `yanRatio*`, `*Limit`, and `fillFkFirst` are only meaningful when `nutrientRegimen` is
+        `advanced`.
+      operationId: buildBatch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                units: { type: string, enum: [us, metric], default: us }
+                volume:
+                  type: number
+                  description: Batch volume, in gallons (us) or liters (metric). Defaults to 5 (us) or 18.9 (metric).
+                yeastAbv: { type: number, default: 18, description: The yeast's expected %ABV tolerance. }
+                residualSugar:
+                  type: number
+                  default: 1.02
+                  description: Target FG. Ignored if ogOverride is set (re-derived from it instead).
+                yanRequirement:
+                  type: string
+                  enum: [very_low, low, medium, high, kveik]
+                  default: medium
+                nutrientRegimen:
+                  type: string
+                  enum: [tosna, k_dap, blount_elliott, tosna_k, o_k, advanced]
+                  default: blount_elliott
+                ogOverride:
+                  type: number
+                  nullable: true
+                  description: Target OG. If set, overrides residualSugar (re-deriving FG, clamped to a minimum of 1.0).
+                pitchRateOverride:
+                  type: number
+                  nullable: true
+                  description: Yeast g/gallon (us) or g/L (metric), overriding the normal Go-Ferm/pitch-rate calculation.
+                fruitSg:
+                  type: number
+                  nullable: true
+                  description: Gravity contribution from fruit/grains. Must not exceed the resolved OG.
+                yanOverride:
+                  type: number
+                  nullable: true
+                  description: Target total YAN (ppm). Used only for the advanced regimen.
+                fermOEffectiveness: { type: number, default: 2.6 }
+                enforceLimits: { type: boolean, default: true }
+                dapLimit: { type: number, default: 0.96, description: g/L. }
+                fermKLimit: { type: number, default: 0.5, description: g/L. }
+                fermOLimit: { type: number, default: 0.45, description: g/L. }
+                yanRatioDap: { type: number, default: 35 }
+                yanRatioFermK: { type: number, default: 25 }
+                yanRatioFermO: { type: number, default: 40 }
+                fermKYan: { type: number, default: 134, description: ppm YAN provided by the Fermaid K product in use. }
+                gofermYan: { type: number, default: 77, description: ppm YAN provided by the Go-Ferm product in use. }
+                fillFkFirst: { type: boolean, default: true }
+                hot:
+                  type: boolean
+                  default: false
+                  description: Whether fermenting hot (affects the default SNA schedule).
+                snaScheduleOverride:
+                  type: array
+                  nullable: true
+                  description: >
+                    Explicit SNA schedule, overriding the default derived from yanRequirement/hot/og.
+                    Each element is an hour count (1-500), "break", or "pitch" (only as the first element).
+                  items:
+                    oneOf:
+                      - type: number
+                      - type: string
+                  example: [24, 48, 72, 'break']
+      responses:
+        '200':
+          description: Full recipe.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      volume: { type: number }
+                      units: { type: integer }
+                      og: { type: number }
+                      fg: { type: number }
+                      abv: { type: number }
+                      yanRequirement: { type: integer }
+                      nutrientRegimen: { type: integer }
+                      gofermYanContribution: { type: number }
+                      fruitPercent: { type: number }
+                      fruitPercent100: { type: number }
+                      fruitYanContribution: { type: number }
+                      honey:
+                        type: object
+                        properties:
+                          weight: { type: number }
+                          unit: { type: string, example: lbs }
+                      goferm:
+                        type: object
+                        properties:
+                          minGrams: { type: number }
+                          numPackets: { type: integer }
+                          grams: { type: number }
+                          dilutionWaterMl: { type: number }
+                      nut:
+                        type: object
+                        description: The resolved nutrient schedule for the selected regimen.
+                        properties:
+                          nitrogen: { type: number }
+                          totalFermO: { type: number }
+                          totalFermK: { type: number }
+                          totalDAP: { type: number }
+                          additions:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                timing:
+                                  oneOf:
+                                    - type: number
+                                    - type: string
+                                fermO: { type: number }
+                                fermK: { type: number }
+                                dap: { type: number }
+                      advancedNutrients:
+                        type: object
+                        nullable: true
+                        description: Present only when nutrientRegimen is advanced; same shape as /calculate-nutrients' response.
+                      break3:
+                        type: number
+                        description: The 1/3 sugar break gravity, used to label the corresponding addition.
+        '400':
+          $ref: '#/components/responses/Error'
+
   /sugar-sources/{name}:
     get:
       tags: [Sugar sources]

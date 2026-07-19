@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
+use MeadBotApi\Calculator\BatchCalculator;
 use MeadBotApi\Calculator\BlendCalculator;
 use MeadBotApi\Calculator\CalculatorApi;
 use MeadBotApi\Calculator\Constants;
@@ -113,6 +114,68 @@ function parseUnits(?string $value): int
         'imperial' => Constants::UNITS_IMPERIAL,
         default => throw new InvalidArgumentException("Unknown units: {$value}"),
     };
+}
+
+function parseYanRequirement(?string $value): int
+{
+    return match ($value) {
+        'very_low' => Constants::YAN_REQUIREMENT_VERY_LOW,
+        null, 'medium' => Constants::YAN_REQUIREMENT_MEDIUM,
+        'low' => Constants::YAN_REQUIREMENT_LOW,
+        'high' => Constants::YAN_REQUIREMENT_HIGH,
+        'kveik' => Constants::YAN_REQUIREMENT_KVEIK,
+        default => throw new InvalidArgumentException("Unknown yanRequirement: {$value}"),
+    };
+}
+
+function parseNutrientRegimen(?string $value): int
+{
+    return match ($value) {
+        'tosna' => Constants::NUTRIENT_REGIMEN_TOSNA,
+        'k_dap' => Constants::NUTRIENT_REGIMEN_K_DAP,
+        null, 'blount_elliott', 'blount_elliot' => Constants::NUTRIENT_REGIMEN_BLOUNT_ELLIOTT,
+        'tosna_k' => Constants::NUTRIENT_REGIMEN_TOSNA_K,
+        'o_k' => Constants::NUTRIENT_REGIMEN_O_K,
+        'advanced' => Constants::NUTRIENT_REGIMEN_ADVANCED,
+        default => throw new InvalidArgumentException("Unknown nutrientRegimen: {$value}"),
+    };
+}
+
+/**
+ * Validates an optional SNA schedule: each element must be the string "pitch" (only as the
+ * first element), the string "break", or a number in [1, 500].
+ *
+ * @return array<int, int|string>|null
+ */
+function parseSnaSchedule(mixed $value): ?array
+{
+    if ($value === null) {
+        return null;
+    }
+    if (!is_array($value)) {
+        throw new InvalidArgumentException('snaScheduleOverride must be an array.');
+    }
+
+    $schedule = [];
+    foreach (array_values($value) as $i => $part) {
+        if ($part === 'pitch') {
+            if ($i !== 0) {
+                throw new InvalidArgumentException('"pitch" can only be the first item in snaScheduleOverride.');
+            }
+            $schedule[] = 'pitch';
+        } elseif ($part === 'break') {
+            $schedule[] = 'break';
+        } elseif (is_numeric($part)) {
+            $num = (int) $part;
+            if ($num < 1 || $num > 500) {
+                throw new InvalidArgumentException("snaScheduleOverride value out of range: {$num}");
+            }
+            $schedule[] = $num;
+        } else {
+            throw new InvalidArgumentException('Invalid snaScheduleOverride value: ' . json_encode($part));
+        }
+    }
+    return $schedule;
 }
 
 $router = new Router();
@@ -241,6 +304,37 @@ $router->post('/api/v1/calculate-nutrients', function (array $p) {
         'gofermYan' => optionalNumeric($p, 'gofermYan') ?? 77.0,
         'gofermGrams' => optionalNumeric($p, 'gofermGrams') ?? 0.0,
     ]) + ['error' => false];
+});
+
+$router->post('/api/v1/build-batch', function (array $p) {
+    $units = parseUnits(optionalParam($p, 'units'));
+    $volume = optionalNumeric($p, 'volume') ?? ($units === Constants::UNITS_US ? 5.0 : 18.9);
+
+    return BatchCalculator::buildBatch([
+        'units' => $units,
+        'volume' => $volume,
+        'yeastAbv' => optionalNumeric($p, 'yeastAbv') ?? 18.0,
+        'residualSugar' => optionalNumeric($p, 'residualSugar') ?? 1.02,
+        'yanRequirement' => parseYanRequirement(optionalParam($p, 'yanRequirement')),
+        'nutrientRegimen' => parseNutrientRegimen(optionalParam($p, 'nutrientRegimen')),
+        'ogOverride' => optionalNumeric($p, 'ogOverride') ?? 0.0,
+        'pitchRateOverride' => optionalNumeric($p, 'pitchRateOverride') ?? 0.0,
+        'fruitSg' => optionalNumeric($p, 'fruitSg') ?? 0.0,
+        'yanOverride' => optionalNumeric($p, 'yanOverride') ?? 0.0,
+        'fermOEffectiveness' => optionalNumeric($p, 'fermOEffectiveness') ?? 2.6,
+        'enforceLimits' => filter_var(optionalParam($p, 'enforceLimits', true), FILTER_VALIDATE_BOOLEAN),
+        'dapLimit' => optionalNumeric($p, 'dapLimit') ?? 0.96,
+        'fermKLimit' => optionalNumeric($p, 'fermKLimit') ?? 0.5,
+        'fermOLimit' => optionalNumeric($p, 'fermOLimit') ?? 0.45,
+        'yanRatioDap' => optionalNumeric($p, 'yanRatioDap') ?? 35.0,
+        'yanRatioFermK' => optionalNumeric($p, 'yanRatioFermK') ?? 25.0,
+        'yanRatioFermO' => optionalNumeric($p, 'yanRatioFermO') ?? 40.0,
+        'fermKYan' => optionalNumeric($p, 'fermKYan') ?? 134.0,
+        'gofermYan' => optionalNumeric($p, 'gofermYan') ?? 77.0,
+        'fillFkFirst' => filter_var(optionalParam($p, 'fillFkFirst', true), FILTER_VALIDATE_BOOLEAN),
+        'hot' => filter_var(optionalParam($p, 'hot', false), FILTER_VALIDATE_BOOLEAN),
+        'snaScheduleOverride' => parseSnaSchedule(optionalParam($p, 'snaScheduleOverride')),
+    ]);
 });
 
 // Sugar sources

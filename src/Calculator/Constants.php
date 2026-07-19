@@ -167,6 +167,32 @@ final class Constants
         self::YAN_REQUIREMENT_KVEIK => 'Kveik',
     ];
 
+    // nutrient factors for extra low/low/medium/high/kveik requirements
+    public const NUTRIENT_FACTOR = [
+        self::YAN_REQUIREMENT_VERY_LOW => 0.5,
+        self::YAN_REQUIREMENT_LOW => 0.75,
+        self::YAN_REQUIREMENT_MEDIUM => 0.9,
+        self::YAN_REQUIREMENT_HIGH => 1.25,
+        self::YAN_REQUIREMENT_KVEIK => 1.875,
+    ];
+
+    // different nutrient regimens
+    public const NUTRIENT_REGIMEN_TOSNA = 0;
+    public const NUTRIENT_REGIMEN_K_DAP = 1;
+    public const NUTRIENT_REGIMEN_BLOUNT_ELLIOTT = 2;
+    public const NUTRIENT_REGIMEN_TOSNA_K = 3;
+    public const NUTRIENT_REGIMEN_O_K = 4;
+    public const NUTRIENT_REGIMEN_ADVANCED = 5;
+
+    public const NUTRIENT_REGIMEN_STRING = [
+        self::NUTRIENT_REGIMEN_TOSNA => 'TOSNA',
+        self::NUTRIENT_REGIMEN_K_DAP => 'Fermaid K + DAP',
+        self::NUTRIENT_REGIMEN_BLOUNT_ELLIOTT => 'Blount-Elliott',
+        self::NUTRIENT_REGIMEN_TOSNA_K => 'TOSNA (K)',
+        self::NUTRIENT_REGIMEN_O_K => 'Fermaid O/K',
+        self::NUTRIENT_REGIMEN_ADVANCED => 'Advanced',
+    ];
+
     // sugar source identifiers that index into SUGAR_SOURCE_INFO
     public const SUGAR_SOURCES = [
         'HONEY' => 0, 'SUGAR' => 1, 'ACEROLA' => 2, 'APPLES' => 3, 'APRICOTS' => 4,
