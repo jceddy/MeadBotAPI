@@ -141,6 +141,32 @@ final class Constants
     public const BLEND_FIELD_VOLUME2 = 4;
     public const BLEND_FIELD_TOTAL_VOLUME = 5;
 
+    // types of units that control various defaults and displays
+    public const UNITS_METRIC = 0;
+    public const UNITS_US = 1;
+    public const UNITS_IMPERIAL = 2;
+
+    public const UNIT_NAMES = [
+        self::UNITS_METRIC => 'Metric',
+        self::UNITS_US => 'US',
+        self::UNITS_IMPERIAL => 'Imperial',
+    ];
+
+    // identifiers for yeast YAN requirements
+    public const YAN_REQUIREMENT_VERY_LOW = 0;
+    public const YAN_REQUIREMENT_LOW = 1;
+    public const YAN_REQUIREMENT_MEDIUM = 2;
+    public const YAN_REQUIREMENT_HIGH = 3;
+    public const YAN_REQUIREMENT_KVEIK = 4;
+
+    public const YAN_REQUIREMENT_STRING = [
+        self::YAN_REQUIREMENT_VERY_LOW => 'Very Low',
+        self::YAN_REQUIREMENT_LOW => 'Low',
+        self::YAN_REQUIREMENT_MEDIUM => 'Medium',
+        self::YAN_REQUIREMENT_HIGH => 'High',
+        self::YAN_REQUIREMENT_KVEIK => 'Kveik',
+    ];
+
     // sugar source identifiers that index into SUGAR_SOURCE_INFO
     public const SUGAR_SOURCES = [
         'HONEY' => 0, 'SUGAR' => 1, 'ACEROLA' => 2, 'APPLES' => 3, 'APRICOTS' => 4,

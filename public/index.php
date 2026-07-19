@@ -8,6 +8,7 @@ use MeadBotApi\Calculator\BlendCalculator;
 use MeadBotApi\Calculator\CalculatorApi;
 use MeadBotApi\Calculator\Constants;
 use MeadBotApi\Calculator\GravityCalculator;
+use MeadBotApi\Calculator\NutrientCalculator;
 use MeadBotApi\Http\Router;
 
 /** Fetch a required param, throwing a 400-mappable exception if it's missing. */
@@ -101,6 +102,16 @@ function parseBlendField(string $value): int
         'volume2' => Constants::BLEND_FIELD_VOLUME2,
         'total_volume' => Constants::BLEND_FIELD_TOTAL_VOLUME,
         default => throw new InvalidArgumentException("Unknown fieldToCalculate: {$value}"),
+    };
+}
+
+function parseUnits(?string $value): int
+{
+    return match ($value) {
+        null, 'us' => Constants::UNITS_US,
+        'metric' => Constants::UNITS_METRIC,
+        'imperial' => Constants::UNITS_IMPERIAL,
+        default => throw new InvalidArgumentException("Unknown units: {$value}"),
     };
 }
 
@@ -208,6 +219,29 @@ $router->post('/api/v1/calculate-blend', fn (array $p) => BlendCalculator::calcu
     optionalNumeric($p, 'volume2'),
     optionalNumeric($p, 'totalVolume')
 ));
+
+$router->post('/api/v1/calculate-nutrients', function (array $p) {
+    $units = parseUnits(optionalParam($p, 'units'));
+    $volume = optionalNumeric($p, 'volume') ?? ($units === Constants::UNITS_US ? 5.0 : 18.9);
+
+    return NutrientCalculator::calculateNutrients([
+        'units' => $units,
+        'volume' => $volume,
+        'yan' => optionalNumeric($p, 'yan') ?? 175.0,
+        'fermOEffectiveness' => optionalNumeric($p, 'fermOEffectiveness') ?? 2.6,
+        'enforceLimits' => filter_var(optionalParam($p, 'enforceLimits', true), FILTER_VALIDATE_BOOLEAN),
+        'dapLimit' => optionalNumeric($p, 'dapLimit') ?? 0.96,
+        'fermKLimit' => optionalNumeric($p, 'fermKLimit') ?? 0.5,
+        'fermOLimit' => optionalNumeric($p, 'fermOLimit') ?? 0.45,
+        'yanRatioDap' => optionalNumeric($p, 'yanRatioDap') ?? 35.0,
+        'yanRatioFermK' => optionalNumeric($p, 'yanRatioFermK') ?? 25.0,
+        'yanRatioFermO' => optionalNumeric($p, 'yanRatioFermO') ?? 40.0,
+        'fermKYan' => optionalNumeric($p, 'fermKYan') ?? 134.0,
+        'fillFkFirst' => filter_var(optionalParam($p, 'fillFkFirst', true), FILTER_VALIDATE_BOOLEAN),
+        'gofermYan' => optionalNumeric($p, 'gofermYan') ?? 77.0,
+        'gofermGrams' => optionalNumeric($p, 'gofermGrams') ?? 0.0,
+    ]) + ['error' => false];
+});
 
 // Sugar sources
 $router->get('/api/v1/sugar-sources/{name}', function (array $p) {
