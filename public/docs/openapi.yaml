@@ -23,6 +23,8 @@ tags:
   - name: Volume
   - name: Honey
   - name: Temperature
+  - name: Blending
+  - name: Nutrients
   - name: Sugar sources
   - name: Dates
   - name: Misc
@@ -203,6 +205,33 @@ paths:
                       fg: { type: number }
         '400':
           $ref: '#/components/responses/Error'
+
+  /volume-units:
+    get:
+      tags: [Volume]
+      summary: List all recognized volume unit names
+      description: >
+        Lists the canonical (non-alias) name for each volume unit alongside its display name.
+        /volume-units/{name} additionally accepts many alias spellings not listed here (e.g.
+        `gal`, `gallon`, `gallons` all resolve to `gallons_us`).
+      operationId: listVolumeUnits
+      responses:
+        '200':
+          description: Volume units.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      volumeUnits:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            unit: { type: string, example: gallons_us }
+                            name: { type: string, example: Gallon(s) US }
 
   /volume-units/{name}:
     get:
@@ -406,6 +435,588 @@ paths:
                       delle: { type: number }
         '400':
           $ref: '#/components/responses/Error'
+
+  /potential-alcohol:
+    post:
+      tags: [Gravity & ABV]
+      summary: Solve for whichever of og/fg/abv is implied by the other(s)
+      description: >
+        At least one of `og`, `fg`, `abv` must be supplied. Priority: if `og` and `abv` are both
+        given, `fg` is solved; if only `og` is given (optionally with `fg`), `abv` is solved;
+        otherwise `og` is solved from `fg` and `abv` (using a default for whichever of those two
+        is also omitted). This mirrors the priority used by MeadBot's `!potential-alcohol`
+        command. That command originally had two bugs this endpoint was built to avoid — not
+        converting BRIX/BAUME inputs to SG in two of its three solve branches, and silently
+        ignoring a specified og/abv that happened to equal its own default — both since fixed in
+        MeadBot too. One difference remains: since this endpoint has no existing consumers, it
+        uses a single consistent ABV↔SG formula for both solve-og and solve-fg, where MeadBot's
+        command still uses a different approximation in each (see the MeadBot repo's
+        `GravityCalculator.resolveGravityAbvTrio` for details).
+      operationId: potentialAlcohol
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                gravityUnits:
+                  type: string
+                  enum: [sg, brix, baume]
+                  default: sg
+                abvUnits:
+                  type: string
+                  enum: [abv, abw]
+                  default: abv
+                og:
+                  type: number
+                  nullable: true
+                  description: Original gravity, in gravityUnits.
+                  example: 1.1
+                fg:
+                  type: number
+                  nullable: true
+                  description: Final gravity, in gravityUnits.
+                abv:
+                  type: number
+                  nullable: true
+                  description: Alcohol content, in abvUnits.
+                  example: 14.0
+      responses:
+        '200':
+          description: Resolved og/fg/abv trio.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      gravityUnits: { type: string }
+                      abvUnits: { type: string }
+                      og: { type: number }
+                      fg: { type: number }
+                      abv: { type: number }
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /calculate-blend:
+    post:
+      tags: [Blending]
+      summary: Solve for one field of a two-liquid blend given the other four (or five)
+      description: >
+        Given any four of `{value1, value2, blendedValue, volume1, volume2, totalVolume}` (five
+        for `total_volume` itself, which additionally accepts being solved from just
+        `value1`/`value2`/`blendedValue` plus one of `volume1`/`volume2`), solves for
+        `fieldToCalculate`. Fields not involved in the solve are returned as `null`.
+      operationId: calculateBlend
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fieldToCalculate]
+              properties:
+                fieldToCalculate:
+                  type: string
+                  enum: [value1, value2, blended_value, volume1, volume2, total_volume]
+                value1:
+                  type: number
+                  nullable: true
+                  description: The first liquid's value (gravity/ABV/etc — whatever is being blended).
+                value2:
+                  type: number
+                  nullable: true
+                  description: The second liquid's value.
+                blendedValue:
+                  type: number
+                  nullable: true
+                  description: The value after blending.
+                volume1:
+                  type: number
+                  nullable: true
+                  description: Volume of the liquid with value1.
+                volume2:
+                  type: number
+                  nullable: true
+                  description: Volume of the liquid with value2.
+                totalVolume:
+                  type: number
+                  nullable: true
+                  description: volume1 + volume2.
+              example:
+                fieldToCalculate: volume2
+                value1: 11
+                value2: 15
+                blendedValue: 12
+                volume1: 3
+      responses:
+        '200':
+          description: Resolved blend fields.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      value1: { type: number, nullable: true }
+                      value2: { type: number, nullable: true }
+                      blendedValue: { type: number, nullable: true }
+                      volume1: { type: number, nullable: true }
+                      volume2: { type: number, nullable: true }
+                      totalVolume: { type: number, nullable: true }
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /calculate-nutrients:
+    post:
+      tags: [Nutrients]
+      summary: Compute a staggered-nutrient-addition (SNA) schedule for a target YAN
+      description: >
+        Splits a target YAN across Fermaid O, Fermaid K, and DAP (Blount-Elliott style, subject
+        to per-source limits unless `enforceLimits` is false) and staggers the additions across
+        a fixed schedule of 24/48/72 hours post-pitch plus the 1/3 sugar break. All parameters
+        are optional; defaults match MeadBot's `!calculate-nutrients` command.
+      operationId: calculateNutrients
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                units: { type: string, enum: [us, metric], default: us }
+                volume:
+                  type: number
+                  description: Must volume, in gallons (us) or liters (metric). Defaults to 5 (us) or 18.9 (metric).
+                yan: { type: number, default: 175, description: Target total YAN (ppm). }
+                fermOEffectiveness: { type: number, default: 2.6 }
+                enforceLimits: { type: boolean, default: true }
+                dapLimit: { type: number, default: 0.96, description: g/L. }
+                fermKLimit: { type: number, default: 0.5, description: g/L. }
+                fermOLimit: { type: number, default: 0.45, description: g/L. }
+                yanRatioDap: { type: number, default: 35, description: Used only when enforceLimits is false. }
+                yanRatioFermK: { type: number, default: 25, description: Used only when enforceLimits is false. }
+                yanRatioFermO: { type: number, default: 40, description: Used only when enforceLimits is false. }
+                fermKYan: { type: number, default: 134, description: ppm YAN provided by the Fermaid K product in use. }
+                fillFkFirst: { type: boolean, default: true }
+                gofermYan: { type: number, default: 77, description: ppm YAN provided by the Go-Ferm product in use. }
+                gofermGrams:
+                  type: number
+                  default: 0
+                  description: Grams of Go-Ferm already used for rehydration; its YAN contribution is subtracted from yan.
+      responses:
+        '200':
+          description: Nutrient schedule.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      yan: { type: number, description: Target YAN after subtracting the Go-Ferm contribution. }
+                      volume: { type: number }
+                      units: { type: integer }
+                      foe: { type: number }
+                      dap_limit: { type: number }
+                      fermK_limit: { type: number }
+                      fermO_limit: { type: number }
+                      yan_ratio_dap: { type: number }
+                      yan_ratio_fermK: { type: number }
+                      yan_ratio_fermO: { type: number }
+                      dapGL: { type: number }
+                      fkGL: { type: number }
+                      foGL: { type: number }
+                      dapYan: { type: number }
+                      fkYan: { type: number }
+                      foYan: { type: number }
+                      dapG: { type: number }
+                      fkG: { type: number }
+                      foG: { type: number }
+                      enforce: { type: boolean }
+                      debug: { type: string, description: Which internal solve branch was used. }
+                      gofermYanContribution: { type: number }
+                      sna:
+                        type: object
+                        properties:
+                          nitrogen: { type: number }
+                          totalFermO: { type: number }
+                          totalFermK: { type: number }
+                          totalDAP: { type: number }
+                          additions:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                timing:
+                                  description: An hour count, or the string "break" for the 1/3 sugar break.
+                                  oneOf:
+                                    - type: number
+                                    - type: string
+                                fermO: { type: number }
+                                fermK: { type: number }
+                                dap: { type: number }
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /build-batch:
+    post:
+      tags: [Nutrients]
+      summary: Build a full recipe (honey, yeast, nutrients) for a target batch
+      description: >
+        Resolves a target OG/FG/ABV, picks an SNA schedule (or uses `snaScheduleOverride`),
+        applies any fruit/grain YAN contribution, computes the honey weight and yeast/Go-Ferm
+        requirements, and splits nutrients across whichever `nutrientRegimen` was selected. All
+        parameters are optional; defaults match MeadBot's `!build-batch` command. `advanced*`,
+        `yanRatio*`, `*Limit`, and `fillFkFirst` are only meaningful when `nutrientRegimen` is
+        `advanced`.
+      operationId: buildBatch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                units: { type: string, enum: [us, metric], default: us }
+                volume:
+                  type: number
+                  description: Batch volume, in gallons (us) or liters (metric). Defaults to 5 (us) or 18.9 (metric).
+                yeastAbv: { type: number, default: 18, description: The yeast's expected %ABV tolerance. }
+                residualSugar:
+                  type: number
+                  default: 1.02
+                  description: Target FG. Ignored if ogOverride is set (re-derived from it instead).
+                yanRequirement:
+                  type: string
+                  enum: [very_low, low, medium, high, kveik]
+                  default: medium
+                nutrientRegimen:
+                  type: string
+                  enum: [tosna, k_dap, blount_elliott, tosna_k, o_k, advanced]
+                  default: blount_elliott
+                ogOverride:
+                  type: number
+                  nullable: true
+                  description: Target OG. If set, overrides residualSugar (re-deriving FG, clamped to a minimum of 1.0).
+                pitchRateOverride:
+                  type: number
+                  nullable: true
+                  description: Yeast g/gallon (us) or g/L (metric), overriding the normal Go-Ferm/pitch-rate calculation.
+                fruitSg:
+                  type: number
+                  nullable: true
+                  description: Gravity contribution from fruit/grains. Must not exceed the resolved OG.
+                yanOverride:
+                  type: number
+                  nullable: true
+                  description: Target total YAN (ppm). Used only for the advanced regimen.
+                fermOEffectiveness: { type: number, default: 2.6 }
+                enforceLimits: { type: boolean, default: true }
+                dapLimit: { type: number, default: 0.96, description: g/L. }
+                fermKLimit: { type: number, default: 0.5, description: g/L. }
+                fermOLimit: { type: number, default: 0.45, description: g/L. }
+                yanRatioDap: { type: number, default: 35 }
+                yanRatioFermK: { type: number, default: 25 }
+                yanRatioFermO: { type: number, default: 40 }
+                fermKYan: { type: number, default: 134, description: ppm YAN provided by the Fermaid K product in use. }
+                gofermYan: { type: number, default: 77, description: ppm YAN provided by the Go-Ferm product in use. }
+                fillFkFirst: { type: boolean, default: true }
+                hot:
+                  type: boolean
+                  default: false
+                  description: Whether fermenting hot (affects the default SNA schedule).
+                snaScheduleOverride:
+                  type: array
+                  nullable: true
+                  description: >
+                    Explicit SNA schedule, overriding the default derived from yanRequirement/hot/og.
+                    Each element is an hour count (1-500), "break", or "pitch" (only as the first element).
+                  items:
+                    oneOf:
+                      - type: number
+                      - type: string
+                  example: [24, 48, 72, 'break']
+      responses:
+        '200':
+          description: Full recipe.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      volume: { type: number }
+                      units: { type: integer }
+                      og: { type: number }
+                      fg: { type: number }
+                      abv: { type: number }
+                      yanRequirement: { type: integer }
+                      nutrientRegimen: { type: integer }
+                      gofermYanContribution: { type: number }
+                      fruitPercent: { type: number }
+                      fruitPercent100: { type: number }
+                      fruitYanContribution: { type: number }
+                      honey:
+                        type: object
+                        properties:
+                          weight: { type: number }
+                          unit: { type: string, example: lbs }
+                      goferm:
+                        type: object
+                        properties:
+                          minGrams: { type: number }
+                          numPackets: { type: integer }
+                          grams: { type: number }
+                          dilutionWaterMl: { type: number }
+                      nut:
+                        type: object
+                        description: The resolved nutrient schedule for the selected regimen.
+                        properties:
+                          nitrogen: { type: number }
+                          totalFermO: { type: number }
+                          totalFermK: { type: number }
+                          totalDAP: { type: number }
+                          additions:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                timing:
+                                  oneOf:
+                                    - type: number
+                                    - type: string
+                                fermO: { type: number }
+                                fermK: { type: number }
+                                dap: { type: number }
+                      advancedNutrients:
+                        type: object
+                        nullable: true
+                        description: Present only when nutrientRegimen is advanced; same shape as /calculate-nutrients' response.
+                      break3:
+                        type: number
+                        description: The 1/3 sugar break gravity, used to label the corresponding addition.
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /calculate-mead:
+    post:
+      tags: [Nutrients]
+      summary: Build a full recipe from a target gravity, volume, and/or ABV
+      description: >
+        Resolves a target OG/FG/ABV/volume — supply any two of target gravity, target volume, and
+        target ABV, and the third is solved for; when both target gravity and target volume are
+        given without a full sugar specification (or with one that leaves a sugar's amount
+        unspecified), the required sugar quantity is solved for instead. Supports optional step
+        feeding (`targetStepFeedGravity`), fruit/other-sugar YAN contribution via
+        `additionalSugars`, and Go-Ferm/nutrient-schedule computation. All parameters are
+        optional; defaults match MeadBot's `!calculate-mead` command. `additionalSugars` entries'
+        `sugarContent`/`yanMultiplier` default to the named sugar source's known values when
+        omitted.
+      operationId: calculateMead
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                units: { type: string, enum: [us, metric, imperial], default: us }
+                mustTemperature:
+                  type: number
+                  nullable: true
+                  description: Defaults to 68 (us/imperial) or 20 (metric).
+                mustTemperatureUnits:
+                  type: string
+                  enum: [celsius, fahrenheit]
+                  nullable: true
+                  description: Defaults to fahrenheit (us/imperial) or celsius (metric).
+                targetGravity:
+                  type: number
+                  nullable: true
+                  description: Defaults to 1.108 when neither targetVolume nor targetAbv resolve it.
+                targetGravityUnits: { type: string, enum: [sg, brix, baume], nullable: true, default: sg }
+                targetAbv:
+                  type: number
+                  nullable: true
+                  description: Defaults to 14.13 when not resolved from targetGravity/targetStepFeedGravity.
+                targetAbvUnits: { type: string, enum: [abv, abw], nullable: true, default: abv }
+                targetVolume:
+                  type: number
+                  nullable: true
+                  description: Defaults to 5 (us), 18.93 (metric), or 5 (imperial, in imperial gallons).
+                targetVolumeUnits:
+                  type: string
+                  nullable: true
+                  description: >
+                    Defaults to gallons_us/liters/gallons_imp matching units. Any name accepted by
+                    /volume-units/{name}.
+                additionalSugars:
+                  type: array
+                  nullable: true
+                  description: >
+                    Additional fruit/sugar sources contributing to gravity and/or YAN. At most one
+                    entry may omit quantityAmount (it will be solved for); entries with
+                    additive=true must specify quantityAmount.
+                  items:
+                    type: object
+                    required: [type, quantityUnits]
+                    properties:
+                      type:
+                        type: string
+                        example: honey
+                        description: Sugar source name, e.g. honey, blueberry, dried_apricots.
+                      quantityAmount:
+                        type: number
+                        nullable: true
+                        description: Omit to have this sugar's quantity solved for.
+                      quantityUnits:
+                        type: string
+                        example: lbs
+                        description: Any name accepted by GET /honey-units/{name}.
+                      sugarContent:
+                        type: number
+                        nullable: true
+                        description: Percent sugar by weight. Defaults to the sugar source's known value.
+                      yanMultiplier:
+                        type: number
+                        nullable: true
+                        description: Defaults to the sugar source's known value.
+                      additive:
+                        type: boolean
+                        default: false
+                        description: If true, this sugar's volume is added on top of targetVolume rather than being part of it.
+                currentGravity: { type: number, nullable: true, default: 1.0 }
+                currentGravityUnits: { type: string, enum: [sg, brix, baume], nullable: true, default: sg }
+                currentVolume: { type: number, nullable: true, default: 0 }
+                currentVolumeUnits:
+                  type: string
+                  nullable: true
+                  description: Defaults to gallons_us/liters/gallons_imp matching units.
+                targetStepFeedGravity:
+                  type: number
+                  nullable: true
+                  description: >
+                    If set, must be greater than the resolved targetGravity; enables step feeding
+                    and overrides targetAbv (derived from this value instead).
+                yeastAbv: { type: number, default: 18, description: The yeast's expected %ABV tolerance. }
+                yanRequirement:
+                  type: string
+                  enum: [very_low, low, medium, high, kveik]
+                  default: medium
+                hot:
+                  type: boolean
+                  default: false
+                  description: Whether fermenting hot (affects the default SNA schedule).
+                calculateAdditiveHoney:
+                  type: boolean
+                  default: false
+                  description: >
+                    When no additionalSugars are given and both targetGravity and targetVolume are
+                    specified, solve for how much honey to add on top of targetVolume rather than
+                    how much of targetVolume should be honey.
+                fermOEffectiveness: { type: number, default: 2.6 }
+                enforceLimits: { type: boolean, default: true }
+                dapLimit: { type: number, default: 0.96, description: g/L. }
+                fermKLimit: { type: number, default: 0.5, description: g/L. }
+                fermOLimit: { type: number, default: 0.45, description: g/L. }
+                yanRatioDap: { type: number, default: 35 }
+                yanRatioFermK: { type: number, default: 25 }
+                yanRatioFermO: { type: number, default: 40 }
+                fermKYan: { type: number, default: 134, description: ppm YAN provided by the Fermaid K product in use. }
+                gofermYan: { type: number, default: 77, description: ppm YAN provided by the Go-Ferm product in use. }
+                fillFkFirst: { type: boolean, default: true }
+                useGoferm: { type: boolean, default: true }
+                yeastPackGrams: { type: number, default: 5 }
+      responses:
+        '200':
+          description: Full recipe.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      mustTemperature: { type: number }
+                      mustTemperatureUnits: { type: integer }
+                      targetGravity: { type: number }
+                      targetGravityUnits: { type: integer }
+                      targetStepFeedGravity: { type: number, nullable: true }
+                      targetFinalGravity:
+                        type: number
+                        description: The resolved FG, expressed in targetGravityUnits.
+                      targetAbv: { type: number }
+                      targetAbvUnits: { type: integer }
+                      targetVolume: { type: number }
+                      targetVolumeUnits: { type: integer }
+                      stepFeeding:
+                        type: object
+                        nullable: true
+                        description: Present only when targetStepFeedGravity was given.
+                        properties:
+                          volumeAfterSteps: { type: number }
+                          honeyVolsPerStep: { type: number }
+                          numberOfSteps: { type: integer }
+                          stepAddSg: { type: number }
+                      currentGravity: { type: number }
+                      currentGravityUnits: { type: integer }
+                      currentGravitySpecified: { type: boolean }
+                      currentVolume: { type: number }
+                      currentVolumeUnits: { type: integer }
+                      currentVolumeSpecified: { type: boolean }
+                      additionalSugars:
+                        type: array
+                        nullable: true
+                        description: >
+                          Echoes the request's additionalSugars, with any solved-for
+                          quantityAmount filled in.
+                        items:
+                          type: object
+                      goferm:
+                        type: object
+                        properties:
+                          minGrams: { type: number }
+                          numPackets: { type: integer }
+                          grams: { type: number }
+                          dilutionWaterMl: { type: number }
+                          yeastPackGrams: { type: number }
+                      gofermYanContribution: { type: number }
+                      fruitYanContribution: { type: number }
+                      nutrients:
+                        type: object
+                        description: Same shape as /calculate-nutrients' response (minus gofermYanContribution).
+                      break3:
+                        type: number
+                        description: The 1/3 sugar break gravity, used to label the corresponding addition.
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /yeast-requirements:
+    get:
+      tags: [Nutrients]
+      summary: List known yeasts and their YAN requirement
+      operationId: listYeastRequirements
+      responses:
+        '200':
+          description: Yeast YAN requirements.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      yeastRequirements:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            yeast: { type: string, example: Lalvin 71B }
+                            requirement:
+                              type: string
+                              enum: [Very Low, Low, Medium, High, Kveik]
 
   /sugar-sources/{name}:
     get:

@@ -52,6 +52,24 @@ final class Constants
         self::VOLUME_UNIT_CUPS_METRIC => ['name' => 'Cup(s) Metric', 'conversion' => 0.25],
     ];
 
+    // canonical (non-alias) slug for each volume unit, matching MeadBot's VOLUME_UNITS keys
+    // lowercased — used by CalculatorApi::listVolumeUnits(), not by getVolumeUnit() (which
+    // additionally accepts many aliases per unit)
+    public const VOLUME_UNIT_SLUGS = [
+        self::VOLUME_UNIT_LITERS => 'liters',
+        self::VOLUME_UNIT_GALLONS_US => 'gallons_us',
+        self::VOLUME_UNIT_GALLONS_IMP => 'gallons_imp',
+        self::VOLUME_UNIT_FL_OUNCES_US => 'fl_ounces_us',
+        self::VOLUME_UNIT_FL_OUNCES_IMP => 'fl_ounces_imp',
+        self::VOLUME_UNIT_PINTS_US => 'pints_us',
+        self::VOLUME_UNIT_PINTS_IMP => 'pints_imp',
+        self::VOLUME_UNIT_QUARTS_US => 'quarts_us',
+        self::VOLUME_UNIT_QUARTS_IMP => 'quarts_imp',
+        self::VOLUME_UNIT_CUPS_US => 'cups_us',
+        self::VOLUME_UNIT_CUPS_IMP => 'cups_imp',
+        self::VOLUME_UNIT_CUPS_METRIC => 'cups_metric',
+    ];
+
     // honey unit identifiers
     public const HONEY_UNIT_KILOGRAMS = 0;
     public const HONEY_UNIT_POUNDS = 1;
@@ -94,6 +112,136 @@ final class Constants
     public const TEMPERATURE_UNIT_NAMES = [
         self::TEMPERATURE_UNIT_CELSIUS => 'Celsius',
         self::TEMPERATURE_UNIT_FAHRENHEIT => 'Fahrenheit',
+    ];
+
+    // gravity unit identifiers
+    public const GRAVITY_UNIT_SG = 0;
+    public const GRAVITY_UNIT_BRIX = 1;
+    public const GRAVITY_UNIT_BAUME = 2;
+
+    public const GRAVITY_UNIT_NAMES = [
+        self::GRAVITY_UNIT_SG => 'SG',
+        self::GRAVITY_UNIT_BRIX => 'BRIX',
+        self::GRAVITY_UNIT_BAUME => 'Baume',
+    ];
+
+    // alcohol content unit identifiers
+    public const ABV_UNIT_ABV = 0;
+    public const ABV_UNIT_ABW = 1;
+
+    public const ABV_UNIT_NAMES = [
+        self::ABV_UNIT_ABV => '%ABV',
+        self::ABV_UNIT_ABW => '%ABW',
+    ];
+
+    // units identifiers for the blending calculator
+    public const BLEND_UNIT_SG = 0;
+    public const BLEND_UNIT_BRIX = 1;
+    public const BLEND_UNIT_BAUME = 2;
+    public const BLEND_UNIT_ABV = 3;
+    public const BLEND_UNIT_ABW = 4;
+    public const BLEND_UNIT_OTHER = 5;
+
+    public const BLEND_UNIT_NAMES = [
+        self::BLEND_UNIT_SG => 'SG',
+        self::BLEND_UNIT_BRIX => 'BRIX',
+        self::BLEND_UNIT_BAUME => 'Baume',
+        self::BLEND_UNIT_ABV => '%ABV',
+        self::BLEND_UNIT_ABW => '%ABW',
+        self::BLEND_UNIT_OTHER => 'Value',
+    ];
+
+    // field identifiers for the blending calculator
+    public const BLEND_FIELD_VALUE1 = 0;
+    public const BLEND_FIELD_VALUE2 = 1;
+    public const BLEND_FIELD_BLENDED_VALUE = 2;
+    public const BLEND_FIELD_VOLUME1 = 3;
+    public const BLEND_FIELD_VOLUME2 = 4;
+    public const BLEND_FIELD_TOTAL_VOLUME = 5;
+
+    // types of units that control various defaults and displays
+    public const UNITS_METRIC = 0;
+    public const UNITS_US = 1;
+    public const UNITS_IMPERIAL = 2;
+
+    public const UNIT_NAMES = [
+        self::UNITS_METRIC => 'Metric',
+        self::UNITS_US => 'US',
+        self::UNITS_IMPERIAL => 'Imperial',
+    ];
+
+    // identifiers for yeast YAN requirements
+    public const YAN_REQUIREMENT_VERY_LOW = 0;
+    public const YAN_REQUIREMENT_LOW = 1;
+    public const YAN_REQUIREMENT_MEDIUM = 2;
+    public const YAN_REQUIREMENT_HIGH = 3;
+    public const YAN_REQUIREMENT_KVEIK = 4;
+
+    public const YAN_REQUIREMENT_STRING = [
+        self::YAN_REQUIREMENT_VERY_LOW => 'Very Low',
+        self::YAN_REQUIREMENT_LOW => 'Low',
+        self::YAN_REQUIREMENT_MEDIUM => 'Medium',
+        self::YAN_REQUIREMENT_HIGH => 'High',
+        self::YAN_REQUIREMENT_KVEIK => 'Kveik',
+    ];
+
+    // (incomplete) list of YAN requirements for different yeasts
+    public const YAN_REQUIREMENT_BY_YEAST = [
+        'Lalvin 71B' => self::YAN_REQUIREMENT_LOW,
+        'Lalvin BA 11' => self::YAN_REQUIREMENT_HIGH,
+        'Lalvin BM45' => self::YAN_REQUIREMENT_MEDIUM,
+        'Lalvin BM4X4' => self::YAN_REQUIREMENT_HIGH,
+        'Lalvin CLOS' => self::YAN_REQUIREMENT_MEDIUM,
+        'Lalvin CY3079' => self::YAN_REQUIREMENT_HIGH,
+        'Lalvin D21' => self::YAN_REQUIREMENT_LOW,
+        'Lalvin D254' => self::YAN_REQUIREMENT_MEDIUM,
+        'Lalvin D80' => self::YAN_REQUIREMENT_MEDIUM,
+        'Lalvin DV10' => self::YAN_REQUIREMENT_LOW,
+        'Lalvin EC-1118 (OG >= 1.120)' => self::YAN_REQUIREMENT_MEDIUM,
+        'Lalvin EC-1118 (OG < 1.120)' => self::YAN_REQUIREMENT_LOW,
+        'Lalvin K1V-1116' => self::YAN_REQUIREMENT_MEDIUM,
+        'Lalvin QA23' => self::YAN_REQUIREMENT_LOW,
+        'Lalvin R2' => self::YAN_REQUIREMENT_MEDIUM,
+        'Lalvin RC212' => self::YAN_REQUIREMENT_MEDIUM,
+        'Lalvin Rhone 2226' => self::YAN_REQUIREMENT_HIGH,
+        'Red Star Cote Des Blancs' => self::YAN_REQUIREMENT_HIGH,
+        'Red Star Montrachet' => self::YAN_REQUIREMENT_LOW,
+        'Red Star Pasteur Champange' => self::YAN_REQUIREMENT_LOW,
+        'Red Star Pasteur Red' => self::YAN_REQUIREMENT_MEDIUM,
+        'Red Star Premier Cuvee' => self::YAN_REQUIREMENT_MEDIUM,
+        'Uvaferm 43' => self::YAN_REQUIREMENT_LOW,
+        'Uvaferm BDX' => self::YAN_REQUIREMENT_MEDIUM,
+        'Uvaferm SVG' => self::YAN_REQUIREMENT_MEDIUM,
+        'Uvaferm VRB' => self::YAN_REQUIREMENT_MEDIUM,
+        'Viti Levur 58W3' => self::YAN_REQUIREMENT_LOW,
+        'Ale/Lager Yeast' => self::YAN_REQUIREMENT_LOW,
+        'Kveik' => self::YAN_REQUIREMENT_KVEIK,
+    ];
+
+    // nutrient factors for extra low/low/medium/high/kveik requirements
+    public const NUTRIENT_FACTOR = [
+        self::YAN_REQUIREMENT_VERY_LOW => 0.5,
+        self::YAN_REQUIREMENT_LOW => 0.75,
+        self::YAN_REQUIREMENT_MEDIUM => 0.9,
+        self::YAN_REQUIREMENT_HIGH => 1.25,
+        self::YAN_REQUIREMENT_KVEIK => 1.875,
+    ];
+
+    // different nutrient regimens
+    public const NUTRIENT_REGIMEN_TOSNA = 0;
+    public const NUTRIENT_REGIMEN_K_DAP = 1;
+    public const NUTRIENT_REGIMEN_BLOUNT_ELLIOTT = 2;
+    public const NUTRIENT_REGIMEN_TOSNA_K = 3;
+    public const NUTRIENT_REGIMEN_O_K = 4;
+    public const NUTRIENT_REGIMEN_ADVANCED = 5;
+
+    public const NUTRIENT_REGIMEN_STRING = [
+        self::NUTRIENT_REGIMEN_TOSNA => 'TOSNA',
+        self::NUTRIENT_REGIMEN_K_DAP => 'Fermaid K + DAP',
+        self::NUTRIENT_REGIMEN_BLOUNT_ELLIOTT => 'Blount-Elliott',
+        self::NUTRIENT_REGIMEN_TOSNA_K => 'TOSNA (K)',
+        self::NUTRIENT_REGIMEN_O_K => 'Fermaid O/K',
+        self::NUTRIENT_REGIMEN_ADVANCED => 'Advanced',
     ];
 
     // sugar source identifiers that index into SUGAR_SOURCE_INFO

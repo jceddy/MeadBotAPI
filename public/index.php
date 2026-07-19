@@ -4,7 +4,12 @@ declare(strict_types=1);
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
+use MeadBotApi\Calculator\BatchCalculator;
+use MeadBotApi\Calculator\BlendCalculator;
 use MeadBotApi\Calculator\CalculatorApi;
+use MeadBotApi\Calculator\Constants;
+use MeadBotApi\Calculator\GravityCalculator;
+use MeadBotApi\Calculator\NutrientCalculator;
 use MeadBotApi\Http\Router;
 
 /** Fetch a required param, throwing a 400-mappable exception if it's missing. */
@@ -33,6 +38,18 @@ function requireNumeric(array $params, string $name): float
     return (float) $value;
 }
 
+function optionalNumeric(array $params, string $name): ?float
+{
+    $value = optionalParam($params, $name);
+    if ($value === null) {
+        return null;
+    }
+    if (!is_numeric($value)) {
+        throw new InvalidArgumentException("Parameter '{$name}' must be numeric.");
+    }
+    return (float) $value;
+}
+
 function requireDate(array $params, string $name): DateTimeImmutable
 {
     $value = requireParam($params, $name);
@@ -55,6 +72,185 @@ function lookupResult(?int $id, string $notFoundMessage, array $extra = []): arr
         ];
     }
     return array_merge(['error' => false, 'unitId' => $id], $extra);
+}
+
+function parseGravityUnits(?string $value): int
+{
+    return match ($value) {
+        null, 'sg' => Constants::GRAVITY_UNIT_SG,
+        'brix' => Constants::GRAVITY_UNIT_BRIX,
+        'baume' => Constants::GRAVITY_UNIT_BAUME,
+        default => throw new InvalidArgumentException("Unknown gravity units: {$value}"),
+    };
+}
+
+function parseAbvUnits(?string $value): int
+{
+    return match ($value) {
+        null, 'abv' => Constants::ABV_UNIT_ABV,
+        'abw' => Constants::ABV_UNIT_ABW,
+        default => throw new InvalidArgumentException("Unknown abv units: {$value}"),
+    };
+}
+
+function parseBlendField(string $value): int
+{
+    return match ($value) {
+        'value1' => Constants::BLEND_FIELD_VALUE1,
+        'value2' => Constants::BLEND_FIELD_VALUE2,
+        'blended_value' => Constants::BLEND_FIELD_BLENDED_VALUE,
+        'volume1' => Constants::BLEND_FIELD_VOLUME1,
+        'volume2' => Constants::BLEND_FIELD_VOLUME2,
+        'total_volume' => Constants::BLEND_FIELD_TOTAL_VOLUME,
+        default => throw new InvalidArgumentException("Unknown fieldToCalculate: {$value}"),
+    };
+}
+
+function parseUnits(?string $value): int
+{
+    return match ($value) {
+        null, 'us' => Constants::UNITS_US,
+        'metric' => Constants::UNITS_METRIC,
+        'imperial' => Constants::UNITS_IMPERIAL,
+        default => throw new InvalidArgumentException("Unknown units: {$value}"),
+    };
+}
+
+function parseYanRequirement(?string $value): int
+{
+    return match ($value) {
+        'very_low' => Constants::YAN_REQUIREMENT_VERY_LOW,
+        null, 'medium' => Constants::YAN_REQUIREMENT_MEDIUM,
+        'low' => Constants::YAN_REQUIREMENT_LOW,
+        'high' => Constants::YAN_REQUIREMENT_HIGH,
+        'kveik' => Constants::YAN_REQUIREMENT_KVEIK,
+        default => throw new InvalidArgumentException("Unknown yanRequirement: {$value}"),
+    };
+}
+
+function parseNutrientRegimen(?string $value): int
+{
+    return match ($value) {
+        'tosna' => Constants::NUTRIENT_REGIMEN_TOSNA,
+        'k_dap' => Constants::NUTRIENT_REGIMEN_K_DAP,
+        null, 'blount_elliott', 'blount_elliot' => Constants::NUTRIENT_REGIMEN_BLOUNT_ELLIOTT,
+        'tosna_k' => Constants::NUTRIENT_REGIMEN_TOSNA_K,
+        'o_k' => Constants::NUTRIENT_REGIMEN_O_K,
+        'advanced' => Constants::NUTRIENT_REGIMEN_ADVANCED,
+        default => throw new InvalidArgumentException("Unknown nutrientRegimen: {$value}"),
+    };
+}
+
+function parseVolumeUnits(string $value): int
+{
+    $id = CalculatorApi::getVolumeUnit($value);
+    if ($id === null) {
+        throw new InvalidArgumentException("Unknown volume units: {$value}");
+    }
+    return $id;
+}
+
+function parseTemperatureUnits(string $value): int
+{
+    return match ($value) {
+        'c', 'celsius', 'celcius' => Constants::TEMPERATURE_UNIT_CELSIUS,
+        'f', 'fahrenheit' => Constants::TEMPERATURE_UNIT_FAHRENHEIT,
+        default => throw new InvalidArgumentException("Unknown temperature units: {$value}"),
+    };
+}
+
+/**
+ * Validates and normalizes an optional array of additional-sugar specifications for
+ * calculate-mead into the shape BatchCalculator::calculateMead expects. Each entry's `type` and
+ * `quantityUnits` are resolved via the same lookups as the sugar-sources/honey-units endpoints;
+ * `sugarContent`/`yanMultiplier` default to that sugar source's known values when omitted (unlike
+ * the MeadBot command, which always defaults sugar_content to honey's regardless of type unless
+ * explicitly overridden — a quirk not worth reproducing on a fresh endpoint).
+ *
+ * @return array<int, array<string, mixed>>|null
+ */
+function parseAdditionalSugars(mixed $value): ?array
+{
+    if ($value === null) {
+        return null;
+    }
+    if (!is_array($value)) {
+        throw new InvalidArgumentException('additionalSugars must be an array.');
+    }
+
+    $sugars = [];
+    foreach (array_values($value) as $i => $entry) {
+        if (!is_array($entry)) {
+            throw new InvalidArgumentException("additionalSugars[{$i}] must be an object.");
+        }
+        $typeName = (string) requireParam($entry, 'type');
+        $type = CalculatorApi::getSugarSourceIdentifier($typeName);
+        if ($type === null) {
+            throw new InvalidArgumentException("additionalSugars[{$i}]: unknown sugar type: {$typeName}");
+        }
+        $quantityUnitsName = (string) requireParam($entry, 'quantityUnits');
+        $quantityUnits = CalculatorApi::getHoneyUnit($quantityUnitsName);
+        if ($quantityUnits === null) {
+            throw new InvalidArgumentException("additionalSugars[{$i}]: unknown quantityUnits: {$quantityUnitsName}");
+        }
+
+        $quantityAmount = optionalNumeric($entry, 'quantityAmount');
+        $sugarContent = optionalNumeric($entry, 'sugarContent') ?? Constants::SUGAR_SOURCE_INFO[$type]['percent'];
+        $yanMultiplier = optionalNumeric($entry, 'yanMultiplier') ?? Constants::SUGAR_SOURCE_INFO[$type]['yan'];
+        $additive = filter_var(optionalParam($entry, 'additive', false), FILTER_VALIDATE_BOOLEAN);
+
+        if ($additive && $quantityAmount === null) {
+            throw new InvalidArgumentException("additionalSugars[{$i}]: quantityAmount is required when additive is true.");
+        }
+
+        $sugars[] = [
+            'type' => $type,
+            'quantity_amount' => $quantityAmount ?? 0.0,
+            'quantity_amount_specified' => $quantityAmount !== null,
+            'quantity_units' => $quantityUnits,
+            'sugar_content' => $sugarContent,
+            'yan_multiplier' => $yanMultiplier,
+            'additive' => $additive,
+        ];
+    }
+    return $sugars;
+}
+
+/**
+ * Validates an optional SNA schedule: each element must be the string "pitch" (only as the
+ * first element), the string "break", or a number in [1, 500].
+ *
+ * @return array<int, int|string>|null
+ */
+function parseSnaSchedule(mixed $value): ?array
+{
+    if ($value === null) {
+        return null;
+    }
+    if (!is_array($value)) {
+        throw new InvalidArgumentException('snaScheduleOverride must be an array.');
+    }
+
+    $schedule = [];
+    foreach (array_values($value) as $i => $part) {
+        if ($part === 'pitch') {
+            if ($i !== 0) {
+                throw new InvalidArgumentException('"pitch" can only be the first item in snaScheduleOverride.');
+            }
+            $schedule[] = 'pitch';
+        } elseif ($part === 'break') {
+            $schedule[] = 'break';
+        } elseif (is_numeric($part)) {
+            $num = (int) $part;
+            if ($num < 1 || $num > 500) {
+                throw new InvalidArgumentException("snaScheduleOverride value out of range: {$num}");
+            }
+            $schedule[] = $num;
+        } else {
+            throw new InvalidArgumentException('Invalid snaScheduleOverride value: ' . json_encode($part));
+        }
+    }
+    return $schedule;
 }
 
 $router = new Router();
@@ -87,6 +283,8 @@ $router->post('/api/v1/dry-fg', function (array $p) {
 });
 
 // Volume units / conversion
+$router->get('/api/v1/volume-units', fn () => ['error' => false, 'volumeUnits' => CalculatorApi::listVolumeUnits()]);
+
 $router->get('/api/v1/volume-units/{name}', fn (array $p) => lookupResult(
     CalculatorApi::getVolumeUnit($p['name']),
     'Unknown volume unit: ' . $p['name']
@@ -126,6 +324,139 @@ $router->post('/api/v1/delle', fn (array $p) => CalculatorApi::computeDelle(
     requireParam($p, 'abv'),
     requireParam($p, 'sg')
 ));
+
+$router->post('/api/v1/potential-alcohol', function (array $p) {
+    $gravityUnits = parseGravityUnits(optionalParam($p, 'gravityUnits'));
+    $abvUnits = parseAbvUnits(optionalParam($p, 'abvUnits'));
+    $og = optionalParam($p, 'og');
+    $fg = optionalParam($p, 'fg');
+    $abv = optionalParam($p, 'abv');
+
+    if ($og === null && $fg === null && $abv === null) {
+        throw new InvalidArgumentException('At least one of og, fg, or abv must be specified.');
+    }
+    foreach (['og' => $og, 'fg' => $fg, 'abv' => $abv] as $name => $value) {
+        if ($value !== null && !is_numeric($value)) {
+            throw new InvalidArgumentException("Parameter '{$name}' must be numeric.");
+        }
+    }
+
+    return GravityCalculator::potentialAlcohol(
+        $gravityUnits,
+        $abvUnits,
+        $og === null ? null : (float) $og,
+        $fg === null ? null : (float) $fg,
+        $abv === null ? null : (float) $abv
+    );
+});
+
+$router->post('/api/v1/calculate-blend', fn (array $p) => BlendCalculator::calculateBlend(
+    parseBlendField((string) requireParam($p, 'fieldToCalculate')),
+    optionalNumeric($p, 'value1'),
+    optionalNumeric($p, 'value2'),
+    optionalNumeric($p, 'blendedValue'),
+    optionalNumeric($p, 'volume1'),
+    optionalNumeric($p, 'volume2'),
+    optionalNumeric($p, 'totalVolume')
+));
+
+$router->post('/api/v1/calculate-nutrients', function (array $p) {
+    $units = parseUnits(optionalParam($p, 'units'));
+    $volume = optionalNumeric($p, 'volume') ?? ($units === Constants::UNITS_US ? 5.0 : 18.9);
+
+    return NutrientCalculator::calculateNutrients([
+        'units' => $units,
+        'volume' => $volume,
+        'yan' => optionalNumeric($p, 'yan') ?? 175.0,
+        'fermOEffectiveness' => optionalNumeric($p, 'fermOEffectiveness') ?? 2.6,
+        'enforceLimits' => filter_var(optionalParam($p, 'enforceLimits', true), FILTER_VALIDATE_BOOLEAN),
+        'dapLimit' => optionalNumeric($p, 'dapLimit') ?? 0.96,
+        'fermKLimit' => optionalNumeric($p, 'fermKLimit') ?? 0.5,
+        'fermOLimit' => optionalNumeric($p, 'fermOLimit') ?? 0.45,
+        'yanRatioDap' => optionalNumeric($p, 'yanRatioDap') ?? 35.0,
+        'yanRatioFermK' => optionalNumeric($p, 'yanRatioFermK') ?? 25.0,
+        'yanRatioFermO' => optionalNumeric($p, 'yanRatioFermO') ?? 40.0,
+        'fermKYan' => optionalNumeric($p, 'fermKYan') ?? 134.0,
+        'fillFkFirst' => filter_var(optionalParam($p, 'fillFkFirst', true), FILTER_VALIDATE_BOOLEAN),
+        'gofermYan' => optionalNumeric($p, 'gofermYan') ?? 77.0,
+        'gofermGrams' => optionalNumeric($p, 'gofermGrams') ?? 0.0,
+    ]) + ['error' => false];
+});
+
+$router->post('/api/v1/build-batch', function (array $p) {
+    $units = parseUnits(optionalParam($p, 'units'));
+    $volume = optionalNumeric($p, 'volume') ?? ($units === Constants::UNITS_US ? 5.0 : 18.9);
+
+    return BatchCalculator::buildBatch([
+        'units' => $units,
+        'volume' => $volume,
+        'yeastAbv' => optionalNumeric($p, 'yeastAbv') ?? 18.0,
+        'residualSugar' => optionalNumeric($p, 'residualSugar') ?? 1.02,
+        'yanRequirement' => parseYanRequirement(optionalParam($p, 'yanRequirement')),
+        'nutrientRegimen' => parseNutrientRegimen(optionalParam($p, 'nutrientRegimen')),
+        'ogOverride' => optionalNumeric($p, 'ogOverride') ?? 0.0,
+        'pitchRateOverride' => optionalNumeric($p, 'pitchRateOverride') ?? 0.0,
+        'fruitSg' => optionalNumeric($p, 'fruitSg') ?? 0.0,
+        'yanOverride' => optionalNumeric($p, 'yanOverride') ?? 0.0,
+        'fermOEffectiveness' => optionalNumeric($p, 'fermOEffectiveness') ?? 2.6,
+        'enforceLimits' => filter_var(optionalParam($p, 'enforceLimits', true), FILTER_VALIDATE_BOOLEAN),
+        'dapLimit' => optionalNumeric($p, 'dapLimit') ?? 0.96,
+        'fermKLimit' => optionalNumeric($p, 'fermKLimit') ?? 0.5,
+        'fermOLimit' => optionalNumeric($p, 'fermOLimit') ?? 0.45,
+        'yanRatioDap' => optionalNumeric($p, 'yanRatioDap') ?? 35.0,
+        'yanRatioFermK' => optionalNumeric($p, 'yanRatioFermK') ?? 25.0,
+        'yanRatioFermO' => optionalNumeric($p, 'yanRatioFermO') ?? 40.0,
+        'fermKYan' => optionalNumeric($p, 'fermKYan') ?? 134.0,
+        'gofermYan' => optionalNumeric($p, 'gofermYan') ?? 77.0,
+        'fillFkFirst' => filter_var(optionalParam($p, 'fillFkFirst', true), FILTER_VALIDATE_BOOLEAN),
+        'hot' => filter_var(optionalParam($p, 'hot', false), FILTER_VALIDATE_BOOLEAN),
+        'snaScheduleOverride' => parseSnaSchedule(optionalParam($p, 'snaScheduleOverride')),
+    ]);
+});
+
+$router->post('/api/v1/calculate-mead', function (array $p) {
+    $units = parseUnits(optionalParam($p, 'units'));
+
+    return BatchCalculator::calculateMead([
+        'units' => $units,
+        'mustTemperature' => optionalNumeric($p, 'mustTemperature'),
+        'mustTemperatureUnits' => isset($p['mustTemperatureUnits']) ? parseTemperatureUnits((string) $p['mustTemperatureUnits']) : null,
+        'targetGravity' => optionalNumeric($p, 'targetGravity'),
+        'targetGravityUnits' => isset($p['targetGravityUnits']) ? parseGravityUnits((string) $p['targetGravityUnits']) : null,
+        'targetAbv' => optionalNumeric($p, 'targetAbv'),
+        'targetAbvUnits' => isset($p['targetAbvUnits']) ? parseAbvUnits((string) $p['targetAbvUnits']) : null,
+        'targetVolume' => optionalNumeric($p, 'targetVolume'),
+        'targetVolumeUnits' => isset($p['targetVolumeUnits']) ? parseVolumeUnits((string) $p['targetVolumeUnits']) : null,
+        'additionalSugars' => parseAdditionalSugars(optionalParam($p, 'additionalSugars')),
+        'currentGravity' => optionalNumeric($p, 'currentGravity'),
+        'currentGravityUnits' => isset($p['currentGravityUnits']) ? parseGravityUnits((string) $p['currentGravityUnits']) : null,
+        'currentVolume' => optionalNumeric($p, 'currentVolume'),
+        'currentVolumeUnits' => isset($p['currentVolumeUnits']) ? parseVolumeUnits((string) $p['currentVolumeUnits']) : null,
+        'targetStepFeedGravity' => optionalNumeric($p, 'targetStepFeedGravity'),
+        'yeastAbv' => optionalNumeric($p, 'yeastAbv') ?? 18.0,
+        'yanRequirement' => parseYanRequirement(optionalParam($p, 'yanRequirement')),
+        'hot' => filter_var(optionalParam($p, 'hot', false), FILTER_VALIDATE_BOOLEAN),
+        'calculateAdditiveHoney' => filter_var(optionalParam($p, 'calculateAdditiveHoney', false), FILTER_VALIDATE_BOOLEAN),
+        'fermOEffectiveness' => optionalNumeric($p, 'fermOEffectiveness') ?? 2.6,
+        'enforceLimits' => filter_var(optionalParam($p, 'enforceLimits', true), FILTER_VALIDATE_BOOLEAN),
+        'dapLimit' => optionalNumeric($p, 'dapLimit') ?? 0.96,
+        'fermKLimit' => optionalNumeric($p, 'fermKLimit') ?? 0.5,
+        'fermOLimit' => optionalNumeric($p, 'fermOLimit') ?? 0.45,
+        'yanRatioDap' => optionalNumeric($p, 'yanRatioDap') ?? 35.0,
+        'yanRatioFermK' => optionalNumeric($p, 'yanRatioFermK') ?? 25.0,
+        'yanRatioFermO' => optionalNumeric($p, 'yanRatioFermO') ?? 40.0,
+        'fermKYan' => optionalNumeric($p, 'fermKYan') ?? 134.0,
+        'gofermYan' => optionalNumeric($p, 'gofermYan') ?? 77.0,
+        'fillFkFirst' => filter_var(optionalParam($p, 'fillFkFirst', true), FILTER_VALIDATE_BOOLEAN),
+        'useGoferm' => filter_var(optionalParam($p, 'useGoferm', true), FILTER_VALIDATE_BOOLEAN),
+        'yeastPackGrams' => optionalNumeric($p, 'yeastPackGrams') ?? 5.0,
+    ]);
+});
+
+$router->get('/api/v1/yeast-requirements', fn () => [
+    'error' => false,
+    'yeastRequirements' => CalculatorApi::listYeastRequirements(),
+]);
 
 // Sugar sources
 $router->get('/api/v1/sugar-sources/{name}', function (array $p) {

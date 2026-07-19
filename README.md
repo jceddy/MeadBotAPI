@@ -76,6 +76,7 @@ route called with the wrong HTTP method, and `200` otherwise.
 | POST | `/api/v1/abv` | `og`, `fg` (optional — estimated "dry" FG is used if omitted) | `CalculateABV` |
 | POST | `/api/v1/gravity-drop-to-abv` | `sgDelta` | `ConvertGravityDropToABV` |
 | POST | `/api/v1/dry-fg` | `og` | `EstimateDryFG` |
+| GET | `/api/v1/volume-units` | — | `!list-volume-units` |
 | GET | `/api/v1/volume-units/{name}` | — | `GetVolumeUnit` |
 | POST | `/api/v1/volume/convert` | `amount`, `fromUnit`, `toUnit` | `ConvertVolume` |
 | GET | `/api/v1/honey-units/{name}` | — | `GetHoneyUnit` |
@@ -83,11 +84,26 @@ route called with the wrong HTTP method, and `200` otherwise.
 | POST | `/api/v1/temperature/convert` | `fromTemperature`, `fromUnit` (`c`/`celcius`/`f`/`fahrenheit`) | `ConvertTemperature` |
 | POST | `/api/v1/sg-to-brix` | `sg` | `ConvertSGToBrix` |
 | POST | `/api/v1/delle` | `abv`, `sg` | `ComputeDelle` |
+| POST | `/api/v1/potential-alcohol` | `gravityUnits`, `abvUnits`, and at least one of `og`/`fg`/`abv` (see [docs](#api-docs) for the solve priority) | `!potential-alcohol`\* |
+| POST | `/api/v1/calculate-blend` | `fieldToCalculate` and 4-5 of `value1`/`value2`/`blendedValue`/`volume1`/`volume2`/`totalVolume` (see [docs](#api-docs)) | `!calculate-blend` |
+| POST | `/api/v1/calculate-nutrients` | All optional — `units`, `volume`, `yan`, and various nutrient-limit/ratio overrides (see [docs](#api-docs)) | `!calculate-nutrients` |
+| POST | `/api/v1/build-batch` | All optional — `units`, `volume`, `yeastAbv`, `nutrientRegimen`, and many more (see [docs](#api-docs)) | `!build-batch` |
+| POST | `/api/v1/calculate-mead` | All optional — `units`, `targetGravity`/`targetVolume`/`targetAbv` (any two solve the third), `additionalSugars`, and many more (see [docs](#api-docs)) | `!calculate-mead` |
+| GET | `/api/v1/yeast-requirements` | — | `!list-yeast-requirements` |
 | GET | `/api/v1/sugar-sources/{name}` | — | `GetSugarSourceIdentifier` |
 | POST | `/api/v1/dates/days-between` | `date1`, `date2` (parseable date/time strings) | `GetDaysBetween` |
 | POST | `/api/v1/dates/months-between` | `date1`, `date2`, `roundUpFractionalMonths` (optional bool) | `GetMonthsBetween` |
 | GET | `/api/v1/random` | `max` | `RandomInteger` |
 | POST | `/api/v1/hours-string` | `timing`, `break3` (required only when `timing` is `"break"`) | `MakeHoursString` |
+
+\* `/potential-alcohol` mirrors the *intent* of MeadBot's `!potential-alcohol` command. That
+command originally had two bugs — a specified value that happened to equal its default being
+silently ignored, and BRIX/BAUME inputs not being converted to SG before use in two of its three
+solve branches — both since fixed in the MeadBot repo too. One difference remains: MeadBot's
+"solve fg" branch (`og`+`abv` given) still uses a different ABV↔SG approximation than its
+"solve og" branch (`fg`+`abv` given), while this endpoint uses the same formula (an iterative
+search against the real cubic ABV formula) for both, since it has no existing consumers to
+preserve that inconsistency for.
 
 ### Examples
 
@@ -111,6 +127,14 @@ curl -s http://localhost:8000/api/v1/volume/convert \
 - `public/index.php` - front controller; defines all routes and maps HTTP params onto
   `CalculatorApi` calls.
 - `src/Calculator/CalculatorApi.php` - the ported calculator methods.
+- `src/Calculator/GravityCalculator.php` - gravity/ABV unit conversions and the
+  `potentialAlcohol` solver, ported from `GravityCalculator.js`.
+- `src/Calculator/BlendCalculator.php` - the two-liquid blend solver, ported from
+  `BlendCalculator.js`.
+- `src/Calculator/NutrientCalculator.php` - the SNA nutrient-schedule solver, ported from
+  `NutrientCalculator.js`.
+- `src/Calculator/BatchCalculator.php` - full-recipe (honey/yeast/nutrients) orchestration,
+  ported from `BatchCalculator.js`.
 - `src/Calculator/Constants.php` - unit tables, error-type codes, and sugar-source data, ported
   from `CalculatorAPI.Constants.js`.
 - `src/Http/Router.php` - a minimal method+path router used by `public/index.php`.

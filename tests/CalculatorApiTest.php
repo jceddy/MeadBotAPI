@@ -198,4 +198,22 @@ final class CalculatorApiTest extends TestCase
             self::assertLessThan(10, $value);
         }
     }
+
+    public function testListVolumeUnits(): void
+    {
+        $list = CalculatorApi::listVolumeUnits();
+
+        self::assertCount(count(Constants::VOLUME_UNIT_INFO), $list);
+        self::assertSame(['unit' => 'liters', 'name' => 'Liter(s)'], $list[0]);
+        self::assertContains(['unit' => 'gallons_us', 'name' => 'Gallon(s) US'], $list);
+    }
+
+    public function testListYeastRequirements(): void
+    {
+        $list = CalculatorApi::listYeastRequirements();
+
+        self::assertCount(count(Constants::YAN_REQUIREMENT_BY_YEAST), $list);
+        self::assertContains(['yeast' => 'Lalvin 71B', 'requirement' => 'Low'], $list);
+        self::assertContains(['yeast' => 'Kveik', 'requirement' => 'Kveik'], $list);
+    }
 }
