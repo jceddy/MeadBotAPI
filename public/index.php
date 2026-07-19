@@ -5,6 +5,8 @@ declare(strict_types=1);
 require dirname(__DIR__) . '/vendor/autoload.php';
 
 use MeadBotApi\Calculator\CalculatorApi;
+use MeadBotApi\Calculator\Constants;
+use MeadBotApi\Calculator\GravityCalculator;
 use MeadBotApi\Http\Router;
 
 /** Fetch a required param, throwing a 400-mappable exception if it's missing. */
@@ -55,6 +57,25 @@ function lookupResult(?int $id, string $notFoundMessage, array $extra = []): arr
         ];
     }
     return array_merge(['error' => false, 'unitId' => $id], $extra);
+}
+
+function parseGravityUnits(?string $value): int
+{
+    return match ($value) {
+        null, 'sg' => Constants::GRAVITY_UNIT_SG,
+        'brix' => Constants::GRAVITY_UNIT_BRIX,
+        'baume' => Constants::GRAVITY_UNIT_BAUME,
+        default => throw new InvalidArgumentException("Unknown gravity units: {$value}"),
+    };
+}
+
+function parseAbvUnits(?string $value): int
+{
+    return match ($value) {
+        null, 'abv' => Constants::ABV_UNIT_ABV,
+        'abw' => Constants::ABV_UNIT_ABW,
+        default => throw new InvalidArgumentException("Unknown abv units: {$value}"),
+    };
 }
 
 $router = new Router();
@@ -126,6 +147,31 @@ $router->post('/api/v1/delle', fn (array $p) => CalculatorApi::computeDelle(
     requireParam($p, 'abv'),
     requireParam($p, 'sg')
 ));
+
+$router->post('/api/v1/potential-alcohol', function (array $p) {
+    $gravityUnits = parseGravityUnits(optionalParam($p, 'gravityUnits'));
+    $abvUnits = parseAbvUnits(optionalParam($p, 'abvUnits'));
+    $og = optionalParam($p, 'og');
+    $fg = optionalParam($p, 'fg');
+    $abv = optionalParam($p, 'abv');
+
+    if ($og === null && $fg === null && $abv === null) {
+        throw new InvalidArgumentException('At least one of og, fg, or abv must be specified.');
+    }
+    foreach (['og' => $og, 'fg' => $fg, 'abv' => $abv] as $name => $value) {
+        if ($value !== null && !is_numeric($value)) {
+            throw new InvalidArgumentException("Parameter '{$name}' must be numeric.");
+        }
+    }
+
+    return GravityCalculator::potentialAlcohol(
+        $gravityUnits,
+        $abvUnits,
+        $og === null ? null : (float) $og,
+        $fg === null ? null : (float) $fg,
+        $abv === null ? null : (float) $abv
+    );
+});
 
 // Sugar sources
 $router->get('/api/v1/sugar-sources/{name}', function (array $p) {

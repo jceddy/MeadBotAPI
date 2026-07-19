@@ -83,11 +83,18 @@ route called with the wrong HTTP method, and `200` otherwise.
 | POST | `/api/v1/temperature/convert` | `fromTemperature`, `fromUnit` (`c`/`celcius`/`f`/`fahrenheit`) | `ConvertTemperature` |
 | POST | `/api/v1/sg-to-brix` | `sg` | `ConvertSGToBrix` |
 | POST | `/api/v1/delle` | `abv`, `sg` | `ComputeDelle` |
+| POST | `/api/v1/potential-alcohol` | `gravityUnits`, `abvUnits`, and at least one of `og`/`fg`/`abv` (see [docs](#api-docs) for the solve priority) | `!potential-alcohol`\* |
 | GET | `/api/v1/sugar-sources/{name}` | — | `GetSugarSourceIdentifier` |
 | POST | `/api/v1/dates/days-between` | `date1`, `date2` (parseable date/time strings) | `GetDaysBetween` |
 | POST | `/api/v1/dates/months-between` | `date1`, `date2`, `roundUpFractionalMonths` (optional bool) | `GetMonthsBetween` |
 | GET | `/api/v1/random` | `max` | `RandomInteger` |
 | POST | `/api/v1/hours-string` | `timing`, `break3` (required only when `timing` is `"break"`) | `MakeHoursString` |
+
+\* `/potential-alcohol` mirrors the *intent* of MeadBot's `!potential-alcohol` command rather
+than its exact behavior: that command has two known bugs (a specified value that happens to
+equal its default is silently ignored, and BRIX/BAUME inputs aren't converted to SG before use
+in two of its three solve branches) which are preserved as-is in the MeadBot repo for backward
+compatibility, but corrected here since this endpoint has no existing consumers to break.
 
 ### Examples
 
@@ -111,6 +118,8 @@ curl -s http://localhost:8000/api/v1/volume/convert \
 - `public/index.php` - front controller; defines all routes and maps HTTP params onto
   `CalculatorApi` calls.
 - `src/Calculator/CalculatorApi.php` - the ported calculator methods.
+- `src/Calculator/GravityCalculator.php` - gravity/ABV unit conversions and the
+  `potentialAlcohol` solver, ported from `GravityCalculator.js`.
 - `src/Calculator/Constants.php` - unit tables, error-type codes, and sugar-source data, ported
   from `CalculatorAPI.Constants.js`.
 - `src/Http/Router.php` - a minimal method+path router used by `public/index.php`.

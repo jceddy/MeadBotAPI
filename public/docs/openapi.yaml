@@ -407,6 +407,68 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
 
+  /potential-alcohol:
+    post:
+      tags: [Gravity & ABV]
+      summary: Solve for whichever of og/fg/abv is implied by the other(s)
+      description: >
+        At least one of `og`, `fg`, `abv` must be supplied. Priority: if `og` and `abv` are both
+        given, `fg` is solved; if only `og` is given (optionally with `fg`), `abv` is solved;
+        otherwise `og` is solved from `fg` and `abv` (using a default for whichever of those two
+        is also omitted). This mirrors the priority used by MeadBot's `!potential-alcohol`
+        command, but — since this is new API surface with no existing consumers — always
+        converts BRIX/BAUME inputs to SG before computing and uses a single consistent ABV↔SG
+        formula throughout, correcting two bugs present in that command (see the MeadBot repo's
+        `GravityCalculator.resolveGravityAbvTrio` for details on those bugs, preserved there for
+        backward compatibility with the live Discord command).
+      operationId: potentialAlcohol
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                gravityUnits:
+                  type: string
+                  enum: [sg, brix, baume]
+                  default: sg
+                abvUnits:
+                  type: string
+                  enum: [abv, abw]
+                  default: abv
+                og:
+                  type: number
+                  nullable: true
+                  description: Original gravity, in gravityUnits.
+                  example: 1.1
+                fg:
+                  type: number
+                  nullable: true
+                  description: Final gravity, in gravityUnits.
+                abv:
+                  type: number
+                  nullable: true
+                  description: Alcohol content, in abvUnits.
+                  example: 14.0
+      responses:
+        '200':
+          description: Resolved og/fg/abv trio.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      gravityUnits: { type: string }
+                      abvUnits: { type: string }
+                      og: { type: number }
+                      fg: { type: number }
+                      abv: { type: number }
+        '400':
+          $ref: '#/components/responses/Error'
+
   /sugar-sources/{name}:
     get:
       tags: [Sugar sources]

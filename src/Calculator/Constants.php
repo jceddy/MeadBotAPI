@@ -96,6 +96,26 @@ final class Constants
         self::TEMPERATURE_UNIT_FAHRENHEIT => 'Fahrenheit',
     ];
 
+    // gravity unit identifiers
+    public const GRAVITY_UNIT_SG = 0;
+    public const GRAVITY_UNIT_BRIX = 1;
+    public const GRAVITY_UNIT_BAUME = 2;
+
+    public const GRAVITY_UNIT_NAMES = [
+        self::GRAVITY_UNIT_SG => 'SG',
+        self::GRAVITY_UNIT_BRIX => 'BRIX',
+        self::GRAVITY_UNIT_BAUME => 'Baume',
+    ];
+
+    // alcohol content unit identifiers
+    public const ABV_UNIT_ABV = 0;
+    public const ABV_UNIT_ABW = 1;
+
+    public const ABV_UNIT_NAMES = [
+        self::ABV_UNIT_ABV => '%ABV',
+        self::ABV_UNIT_ABW => '%ABW',
+    ];
+
     // sugar source identifiers that index into SUGAR_SOURCE_INFO
     public const SUGAR_SOURCES = [
         'HONEY' => 0, 'SUGAR' => 1, 'ACEROLA' => 2, 'APPLES' => 3, 'APRICOTS' => 4,
