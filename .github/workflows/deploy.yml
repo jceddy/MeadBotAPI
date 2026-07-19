@@ -49,11 +49,18 @@ jobs:
       # Written at the repo root (outside public/, so it's never web-accessible) and loaded at
       # runtime by src/Http/Env.php. .env is gitignored — this is the only place these secrets
       # reach the server, since the deploy itself is a dumb FTP file sync with no remote shell.
+      # Note: this deploy never touches the database itself — apply migrations/*.sql manually
+      # against MYSQL_DB_* (see README) before merging a change that needs a new one; CI has no
+      # DB access to run them automatically.
       - name: Write server .env
         run: |
           cat > .env <<EOF
           FIREWORKS_API_KEY=${{ secrets.FIREWORKS_API_KEY }}
           CHAT_API_KEY=${{ secrets.CHAT_API_KEY }}
+          MYSQL_DB_HOST=${{ secrets.MYSQL_DB_HOST }}
+          MYSQL_DB_DATABASE=${{ secrets.MYSQL_DB_DATABASE }}
+          MYSQL_DB_USERNAME=${{ secrets.MYSQL_DB_USERNAME }}
+          MYSQL_DB_PASSWORD=${{ secrets.MYSQL_DB_PASSWORD }}
           EOF
 
       - name: Deploy over FTP

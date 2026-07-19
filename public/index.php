@@ -11,8 +11,36 @@ use MeadBotApi\Chat\FireworksClient;
 use MeadBotApi\Http\Env;
 use MeadBotApi\Http\Operations;
 use MeadBotApi\Http\Router;
+use MeadBotApi\Ledger\Ledger;
 
 Env::load(dirname(__DIR__) . '/.env');
+
+/** Shared by /chat and /balance/*: checks X-Api-Key against CHAT_API_KEY. Returns an error array to short-circuit the route, or null when authorized. */
+function requireChatApiKey(): ?array
+{
+    $apiKey = getenv('CHAT_API_KEY');
+    if ($apiKey === false || $apiKey === '') {
+        return ['error' => true, 'errorMessage' => 'This endpoint is not configured on this server.'];
+    }
+    $provided = $_SERVER['HTTP_X_API_KEY'] ?? '';
+    if (!hash_equals($apiKey, $provided)) {
+        return ['error' => true, 'errorMessage' => 'Missing or invalid X-Api-Key header.'];
+    }
+    return null;
+}
+
+/**
+ * gpt-oss-120b's published per-1M-token pricing by default; override via .env if FIREWORKS_MODEL
+ * is ever changed to a model with different rates.
+ */
+function fireworksPricing(): CostCalculator
+{
+    return new CostCalculator(
+        (float) (getenv('FIREWORKS_PRICE_INPUT_PER_1M') ?: 0.15),
+        (float) (getenv('FIREWORKS_PRICE_CACHED_INPUT_PER_1M') ?: 0.01),
+        (float) (getenv('FIREWORKS_PRICE_OUTPUT_PER_1M') ?: 0.60)
+    );
+}
 
 $router = new Router();
 
@@ -63,13 +91,8 @@ $router->post('/api/v1/hours-string', fn (array $p) => Operations::makeHoursStri
 
 // Chat agent
 $router->post('/api/v1/chat', function (array $p) {
-    $apiKey = getenv('CHAT_API_KEY');
-    if ($apiKey === false || $apiKey === '') {
-        return ['error' => true, 'errorMessage' => 'Chat is not configured on this server.'];
-    }
-    $provided = $_SERVER['HTTP_X_API_KEY'] ?? '';
-    if (!hash_equals($apiKey, $provided)) {
-        return ['error' => true, 'errorMessage' => 'Missing or invalid X-Api-Key header.'];
+    if ($authError = requireChatApiKey()) {
+        return $authError;
     }
 
     $fireworksKey = getenv('FIREWORKS_API_KEY');
@@ -84,36 +107,73 @@ $router->post('/api/v1/chat', function (array $p) {
 
     $model = getenv('FIREWORKS_MODEL') ?: 'accounts/fireworks/models/gpt-oss-120b';
     $agent = new ChatAgent(new FireworksClient($fireworksKey, $model));
-
-    // Defaults are accounts/fireworks/models/gpt-oss-120b's per-1M-token pricing; override via
-    // .env if FIREWORKS_MODEL is ever changed to a model with different rates.
-    $pricing = new CostCalculator(
-        (float) (getenv('FIREWORKS_PRICE_INPUT_PER_1M') ?: 0.15),
-        (float) (getenv('FIREWORKS_PRICE_CACHED_INPUT_PER_1M') ?: 0.01),
-        (float) (getenv('FIREWORKS_PRICE_OUTPUT_PER_1M') ?: 0.60)
-    );
+    $pricing = fireworksPricing();
+    $ledger = Ledger::connect();
 
     try {
         $result = $agent->run($messages);
     } catch (ChatUsageException $e) {
         // Fireworks already billed for whatever calls succeeded before this failure, even
-        // though the request as a whole didn't complete — surface usage/cost here too so a
-        // balance tracker doesn't silently miss it.
+        // though the request as a whole didn't complete — surface usage/cost here too so the
+        // ledger doesn't silently miss it.
+        $costUsd = $pricing->costUsd($e->usage);
+        $ledger->recordChatUsage($e->usage, $costUsd, $model, false, $e->getMessage());
         return [
             'error' => true,
             'errorMessage' => 'Chat backend error: ' . $e->getMessage(),
             'usage' => $e->usage,
-            'costUsd' => $pricing->costUsd($e->usage),
+            'costUsd' => $costUsd,
         ];
     }
+
+    $costUsd = $pricing->costUsd($result['usage']);
+    $ledger->recordChatUsage($result['usage'], $costUsd, $model, true, null);
 
     return [
         'error' => false,
         'reply' => $result['reply'],
         'messages' => $result['messages'],
         'usage' => $result['usage'],
-        'costUsd' => $pricing->costUsd($result['usage']),
+        'costUsd' => $costUsd,
     ];
+});
+
+// Balance ledger
+$router->post('/api/v1/balance/deposits', function (array $p) {
+    if ($authError = requireChatApiKey()) {
+        return $authError;
+    }
+
+    $amountUsd = $p['amountUsd'] ?? null;
+    if (!is_numeric($amountUsd)) {
+        return ['error' => true, 'errorMessage' => "Parameter 'amountUsd' must be numeric."];
+    }
+    $note = isset($p['note']) ? (string) $p['note'] : null;
+
+    $ledger = Ledger::connect();
+    try {
+        $ledger->recordDeposit((float) $amountUsd, $note);
+        $balance = $ledger->getBalance();
+    } catch (\RuntimeException $e) {
+        return ['error' => true, 'errorMessage' => $e->getMessage()];
+    }
+
+    return ['error' => false, 'deposit' => ['amountUsd' => (float) $amountUsd, 'note' => $note], 'balance' => $balance];
+});
+
+$router->get('/api/v1/balance', function () {
+    if ($authError = requireChatApiKey()) {
+        return $authError;
+    }
+
+    $ledger = Ledger::connect();
+    try {
+        $balance = $ledger->getBalance();
+    } catch (\RuntimeException $e) {
+        return ['error' => true, 'errorMessage' => $e->getMessage()];
+    }
+
+    return ['error' => false, 'balance' => $balance];
 });
 
 // --- dispatch ---

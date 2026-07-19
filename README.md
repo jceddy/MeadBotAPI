@@ -97,6 +97,8 @@ route called with the wrong HTTP method, and `200` otherwise.
 | GET | `/api/v1/random` | `max` | `RandomInteger` |
 | POST | `/api/v1/hours-string` | `timing`, `break3` (required only when `timing` is `"break"`) | `MakeHoursString` |
 | POST | `/api/v1/chat` | `messages` (OpenAI-style conversation). Requires header `X-Api-Key`. | — (see [Chat agent](#chat-agent)) |
+| GET | `/api/v1/balance` | — . Requires header `X-Api-Key`. | — (see [Balance ledger](#balance-ledger)) |
+| POST | `/api/v1/balance/deposits` | `amountUsd`, `note` (optional). Requires header `X-Api-Key`. | — (see [Balance ledger](#balance-ledger)) |
 
 \* `/potential-alcohol` mirrors the *intent* of MeadBot's `!potential-alcohol` command. That
 command originally had two bugs — a specified value that happened to equal its default being
@@ -189,6 +191,58 @@ per 1M tokens), defaulting to gpt-oss-120b's published pricing (`0.15` / `0.01` 
 change `FIREWORKS_MODEL`, set these three to match its pricing — they aren't looked up
 automatically.
 
+## Balance ledger
+
+A small MySQL-backed ledger tracks the prepaid Fireworks balance: every `/api/v1/chat` request
+logs its `usage`/`costUsd` (see above) as a deduction, and `POST /api/v1/balance/deposits` records
+a top-up. `GET /api/v1/balance` returns the running total — always recomputed as
+`SUM(deposits) - SUM(usage)` rather than stored as a column, so it can't drift out of sync.
+
+This is purely informational/tracking — **`/api/v1/chat` never checks the balance or refuses
+requests based on it**, so a bug in the ledger can't accidentally lock out a working endpoint.
+Watch the numbers yourself (or build alerting on top of the database) rather than relying on this
+to enforce a spending cap.
+
+```
+curl -s -X POST http://localhost:8000/api/v1/balance/deposits \
+  -H 'Content-Type: application/json' \
+  -H 'X-Api-Key: <CHAT_API_KEY>' \
+  -d '{"amountUsd": 50, "note": "Fireworks top-up 2026-07-19"}'
+# {"error":false,"deposit":{"amountUsd":50,"note":"..."},"balance":{"totalDepositsUsd":50,"totalUsageUsd":0,"balanceUsd":50}}
+
+curl -s -H 'X-Api-Key: <CHAT_API_KEY>' http://localhost:8000/api/v1/balance
+# {"error":false,"balance":{"totalDepositsUsd":50,"totalUsageUsd":1.23,"balanceUsd":48.77}}
+```
+
+`amountUsd` may be negative for a manual correction to the ledger (e.g. reconciling against
+Fireworks' own billing dashboard) — there's no separate "adjustments" concept, just deposits that
+happen to be negative.
+
+### Setup
+
+Requires four secrets, none needed by anything else here:
+
+- `MYSQL_DB_HOST`, `MYSQL_DB_DATABASE`, `MYSQL_DB_USERNAME`, `MYSQL_DB_PASSWORD` — credentials for
+  a MySQL/MariaDB database this app can reach.
+
+Add all four as **GitHub Actions repository secrets** (same place as `FTP_HOST` etc.) —
+`deploy.yml` writes them into the same `.env` file as the chat secrets. If any is missing, `/chat`
+still works exactly as before (usage-logging silently no-ops rather than failing the request), but
+`/balance` and `/balance/deposits` respond with `{"error":true,"errorMessage":"The balance
+database is not configured on this server."}`.
+
+**Schema changes are never applied automatically** — neither this session nor GitHub Actions has
+network access to the database. Numbered SQL files under `migrations/` describe each schema
+change; apply them yourself, in order, against the database identified by the four secrets above:
+
+```
+mysql --host=<MYSQL_DB_HOST> --user=<MYSQL_DB_USERNAME> -p <MYSQL_DB_DATABASE> < migrations/0001_create_chat_usage.sql
+mysql --host=<MYSQL_DB_HOST> --user=<MYSQL_DB_USERNAME> -p <MYSQL_DB_DATABASE> < migrations/0002_create_balance_deposits.sql
+```
+
+For local development, add the same four lines to your `.env` file (gitignored, not deployed by
+CI) pointing at a local or dev database you've applied the same migrations to.
+
 ## Project structure
 
 - `public/index.php` - front controller; defines all routes (each a thin call into
@@ -215,5 +269,10 @@ automatically.
 - `src/Chat/FireworksClient.php` - minimal client for Fireworks' OpenAI-compatible
   chat-completions endpoint.
 - `src/Chat/ChatAgent.php` - the tool-calling loop used by `/api/v1/chat`.
+- `src/Chat/CostCalculator.php` - turns a token-usage total into an estimated USD cost.
+- `src/Ledger/Ledger.php` - the balance ledger (usage logging, deposits, running balance) used by
+  `/api/v1/chat` and `/api/v1/balance*`; see [Balance ledger](#balance-ledger).
+- `migrations/` - numbered SQL files describing the ledger's schema; apply manually (see
+  [Balance ledger](#balance-ledger)) — never applied automatically.
 - `tests/` - PHPUnit tests, run with `composer test`.
 - `public/docs/` - OpenAPI spec and Swagger UI, served at `/docs`.
