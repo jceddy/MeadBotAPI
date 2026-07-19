@@ -116,6 +116,31 @@ final class Constants
         self::ABV_UNIT_ABW => '%ABW',
     ];
 
+    // units identifiers for the blending calculator
+    public const BLEND_UNIT_SG = 0;
+    public const BLEND_UNIT_BRIX = 1;
+    public const BLEND_UNIT_BAUME = 2;
+    public const BLEND_UNIT_ABV = 3;
+    public const BLEND_UNIT_ABW = 4;
+    public const BLEND_UNIT_OTHER = 5;
+
+    public const BLEND_UNIT_NAMES = [
+        self::BLEND_UNIT_SG => 'SG',
+        self::BLEND_UNIT_BRIX => 'BRIX',
+        self::BLEND_UNIT_BAUME => 'Baume',
+        self::BLEND_UNIT_ABV => '%ABV',
+        self::BLEND_UNIT_ABW => '%ABW',
+        self::BLEND_UNIT_OTHER => 'Value',
+    ];
+
+    // field identifiers for the blending calculator
+    public const BLEND_FIELD_VALUE1 = 0;
+    public const BLEND_FIELD_VALUE2 = 1;
+    public const BLEND_FIELD_BLENDED_VALUE = 2;
+    public const BLEND_FIELD_VOLUME1 = 3;
+    public const BLEND_FIELD_VOLUME2 = 4;
+    public const BLEND_FIELD_TOTAL_VOLUME = 5;
+
     // sugar source identifiers that index into SUGAR_SOURCE_INFO
     public const SUGAR_SOURCES = [
         'HONEY' => 0, 'SUGAR' => 1, 'ACEROLA' => 2, 'APPLES' => 3, 'APRICOTS' => 4,

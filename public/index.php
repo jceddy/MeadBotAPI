@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
+use MeadBotApi\Calculator\BlendCalculator;
 use MeadBotApi\Calculator\CalculatorApi;
 use MeadBotApi\Calculator\Constants;
 use MeadBotApi\Calculator\GravityCalculator;
@@ -29,6 +30,18 @@ function optionalParam(array $params, string $name, mixed $default = null): mixe
 function requireNumeric(array $params, string $name): float
 {
     $value = requireParam($params, $name);
+    if (!is_numeric($value)) {
+        throw new InvalidArgumentException("Parameter '{$name}' must be numeric.");
+    }
+    return (float) $value;
+}
+
+function optionalNumeric(array $params, string $name): ?float
+{
+    $value = optionalParam($params, $name);
+    if ($value === null) {
+        return null;
+    }
     if (!is_numeric($value)) {
         throw new InvalidArgumentException("Parameter '{$name}' must be numeric.");
     }
@@ -75,6 +88,19 @@ function parseAbvUnits(?string $value): int
         null, 'abv' => Constants::ABV_UNIT_ABV,
         'abw' => Constants::ABV_UNIT_ABW,
         default => throw new InvalidArgumentException("Unknown abv units: {$value}"),
+    };
+}
+
+function parseBlendField(string $value): int
+{
+    return match ($value) {
+        'value1' => Constants::BLEND_FIELD_VALUE1,
+        'value2' => Constants::BLEND_FIELD_VALUE2,
+        'blended_value' => Constants::BLEND_FIELD_BLENDED_VALUE,
+        'volume1' => Constants::BLEND_FIELD_VOLUME1,
+        'volume2' => Constants::BLEND_FIELD_VOLUME2,
+        'total_volume' => Constants::BLEND_FIELD_TOTAL_VOLUME,
+        default => throw new InvalidArgumentException("Unknown fieldToCalculate: {$value}"),
     };
 }
 
@@ -172,6 +198,16 @@ $router->post('/api/v1/potential-alcohol', function (array $p) {
         $abv === null ? null : (float) $abv
     );
 });
+
+$router->post('/api/v1/calculate-blend', fn (array $p) => BlendCalculator::calculateBlend(
+    parseBlendField((string) requireParam($p, 'fieldToCalculate')),
+    optionalNumeric($p, 'value1'),
+    optionalNumeric($p, 'value2'),
+    optionalNumeric($p, 'blendedValue'),
+    optionalNumeric($p, 'volume1'),
+    optionalNumeric($p, 'volume2'),
+    optionalNumeric($p, 'totalVolume')
+));
 
 // Sugar sources
 $router->get('/api/v1/sugar-sources/{name}', function (array $p) {

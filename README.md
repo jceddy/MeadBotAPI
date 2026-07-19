@@ -84,6 +84,7 @@ route called with the wrong HTTP method, and `200` otherwise.
 | POST | `/api/v1/sg-to-brix` | `sg` | `ConvertSGToBrix` |
 | POST | `/api/v1/delle` | `abv`, `sg` | `ComputeDelle` |
 | POST | `/api/v1/potential-alcohol` | `gravityUnits`, `abvUnits`, and at least one of `og`/`fg`/`abv` (see [docs](#api-docs) for the solve priority) | `!potential-alcohol`\* |
+| POST | `/api/v1/calculate-blend` | `fieldToCalculate` and 4-5 of `value1`/`value2`/`blendedValue`/`volume1`/`volume2`/`totalVolume` (see [docs](#api-docs)) | `!calculate-blend` |
 | GET | `/api/v1/sugar-sources/{name}` | — | `GetSugarSourceIdentifier` |
 | POST | `/api/v1/dates/days-between` | `date1`, `date2` (parseable date/time strings) | `GetDaysBetween` |
 | POST | `/api/v1/dates/months-between` | `date1`, `date2`, `roundUpFractionalMonths` (optional bool) | `GetMonthsBetween` |
@@ -120,6 +121,8 @@ curl -s http://localhost:8000/api/v1/volume/convert \
 - `src/Calculator/CalculatorApi.php` - the ported calculator methods.
 - `src/Calculator/GravityCalculator.php` - gravity/ABV unit conversions and the
   `potentialAlcohol` solver, ported from `GravityCalculator.js`.
+- `src/Calculator/BlendCalculator.php` - the two-liquid blend solver, ported from
+  `BlendCalculator.js`.
 - `src/Calculator/Constants.php` - unit tables, error-type codes, and sugar-source data, ported
   from `CalculatorAPI.Constants.js`.
 - `src/Http/Router.php` - a minimal method+path router used by `public/index.php`.

@@ -23,6 +23,7 @@ tags:
   - name: Volume
   - name: Honey
   - name: Temperature
+  - name: Blending
   - name: Sugar sources
   - name: Dates
   - name: Misc
@@ -466,6 +467,76 @@ paths:
                       og: { type: number }
                       fg: { type: number }
                       abv: { type: number }
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /calculate-blend:
+    post:
+      tags: [Blending]
+      summary: Solve for one field of a two-liquid blend given the other four (or five)
+      description: >
+        Given any four of `{value1, value2, blendedValue, volume1, volume2, totalVolume}` (five
+        for `total_volume` itself, which additionally accepts being solved from just
+        `value1`/`value2`/`blendedValue` plus one of `volume1`/`volume2`), solves for
+        `fieldToCalculate`. Fields not involved in the solve are returned as `null`.
+      operationId: calculateBlend
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fieldToCalculate]
+              properties:
+                fieldToCalculate:
+                  type: string
+                  enum: [value1, value2, blended_value, volume1, volume2, total_volume]
+                value1:
+                  type: number
+                  nullable: true
+                  description: The first liquid's value (gravity/ABV/etc — whatever is being blended).
+                value2:
+                  type: number
+                  nullable: true
+                  description: The second liquid's value.
+                blendedValue:
+                  type: number
+                  nullable: true
+                  description: The value after blending.
+                volume1:
+                  type: number
+                  nullable: true
+                  description: Volume of the liquid with value1.
+                volume2:
+                  type: number
+                  nullable: true
+                  description: Volume of the liquid with value2.
+                totalVolume:
+                  type: number
+                  nullable: true
+                  description: volume1 + volume2.
+              example:
+                fieldToCalculate: volume2
+                value1: 11
+                value2: 15
+                blendedValue: 12
+                volume1: 3
+      responses:
+        '200':
+          description: Resolved blend fields.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      value1: { type: number, nullable: true }
+                      value2: { type: number, nullable: true }
+                      blendedValue: { type: number, nullable: true }
+                      volume1: { type: number, nullable: true }
+                      volume2: { type: number, nullable: true }
+                      totalVolume: { type: number, nullable: true }
         '400':
           $ref: '#/components/responses/Error'
 
