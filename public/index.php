@@ -80,7 +80,7 @@ $router->post('/api/v1/chat', function (array $p) {
         return ['error' => true, 'errorMessage' => 'messages must be a non-empty array of {role, content} objects.'];
     }
 
-    $model = getenv('FIREWORKS_MODEL') ?: 'accounts/fireworks/models/firefunction-v2';
+    $model = getenv('FIREWORKS_MODEL') ?: 'accounts/fireworks/models/gpt-oss-120b';
     $agent = new ChatAgent(new FireworksClient($fireworksKey, $model));
 
     try {

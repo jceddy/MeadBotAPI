@@ -169,8 +169,8 @@ FIREWORKS_API_KEY=...
 CHAT_API_KEY=...
 ```
 
-The model defaults to `accounts/fireworks/models/firefunction-v2` (Fireworks' model tuned
-specifically for reliable function calling); override it with a third `.env` line,
+The model defaults to `accounts/fireworks/models/gpt-oss-120b` (OpenAI's open-weight
+reasoning/tool-calling model, hosted on Fireworks); override it with a third `.env` line,
 `FIREWORKS_MODEL=accounts/fireworks/models/...`, to try another one.
 
 ## Project structure
