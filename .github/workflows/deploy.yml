@@ -46,6 +46,16 @@ jobs:
       - name: Install production dependencies
         run: composer install --no-dev --optimize-autoloader --no-interaction --no-progress --prefer-dist
 
+      # Written at the repo root (outside public/, so it's never web-accessible) and loaded at
+      # runtime by src/Http/Env.php. .env is gitignored — this is the only place these secrets
+      # reach the server, since the deploy itself is a dumb FTP file sync with no remote shell.
+      - name: Write server .env
+        run: |
+          cat > .env <<EOF
+          FIREWORKS_API_KEY=${{ secrets.FIREWORKS_API_KEY }}
+          CHAT_API_KEY=${{ secrets.CHAT_API_KEY }}
+          EOF
+
       - name: Deploy over FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:

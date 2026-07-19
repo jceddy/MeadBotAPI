@@ -34,10 +34,11 @@ included for Apache + `mod_rewrite`; for nginx, route unmatched requests to `ind
 
 `.github/workflows/deploy.yml` deploys to production automatically on every push to `main`
 (i.e. whenever a PR is merged): it runs the test suite, rebuilds `vendor/` without dev
-dependencies, and uploads the repo (minus `.github/`, `tests/`, and VCS files) over FTP to the
-server root, using the repository secrets `FTP_HOST`, `FTP_USERNAME`, and `FTP_PASSWORD`. This
-assumes the web server's document root points at the `public/` subfolder of that upload
-directory, since `public/index.php` loads `vendor/` and `src/` via paths relative to itself.
+dependencies, writes a `.env` file at the repo root (see [Chat agent](#chat-agent) below), and
+uploads the repo (minus `.github/`, `tests/`, and VCS files) over FTP to the server root, using
+the repository secrets `FTP_HOST`, `FTP_USERNAME`, and `FTP_PASSWORD`. This assumes the web
+server's document root points at the `public/` subfolder of that upload directory, since
+`public/index.php` loads `vendor/`, `src/`, and `.env` via paths relative to itself.
 
 ## API docs
 
@@ -95,6 +96,7 @@ route called with the wrong HTTP method, and `200` otherwise.
 | POST | `/api/v1/dates/months-between` | `date1`, `date2`, `roundUpFractionalMonths` (optional bool) | `GetMonthsBetween` |
 | GET | `/api/v1/random` | `max` | `RandomInteger` |
 | POST | `/api/v1/hours-string` | `timing`, `break3` (required only when `timing` is `"break"`) | `MakeHoursString` |
+| POST | `/api/v1/chat` | `messages` (OpenAI-style conversation). Requires header `X-Api-Key`. | — (see [Chat agent](#chat-agent)) |
 
 \* `/potential-alcohol` mirrors the *intent* of MeadBot's `!potential-alcohol` command. That
 command originally had two bugs — a specified value that happened to equal its default being
@@ -122,10 +124,65 @@ curl -s http://localhost:8000/api/v1/volume/convert \
 # {"error":false,"fromAmount":1,"fromUnit":{"name":"Gallon(s) US","conversion":3.7854117891},"toAmount":3.7854117891,"toUnit":{"name":"Liter(s)","conversion":1}}
 ```
 
+## Chat agent
+
+`POST /api/v1/chat` runs a chat-completions tool-calling loop against
+[Fireworks AI](https://fireworks.ai) (an OpenAI-compatible API) with every calculation/lookup
+endpoint above — except `/health` and `/random` — exposed to the model as a tool. When the model
+calls one, it's executed locally (the same `Http\Operations` method the matching REST route
+calls, not an HTTP round-trip to this same API) and the result is fed back to the model, repeating
+until it replies with plain text.
+
+This endpoint is stateless: it keeps no server-side session, so pass the `messages` array from
+the response back in as the next request's `messages` (with a new `{role: "user", ...}` turn
+appended) to continue a conversation.
+
+```
+curl -s -X POST http://localhost:8000/api/v1/chat \
+  -H 'Content-Type: application/json' \
+  -H 'X-Api-Key: <CHAT_API_KEY>' \
+  -d '{"messages": [{"role": "user", "content": "I have 5 gallons at 1.100 SG. What'\''s my potential ABV?"}]}'
+# {"error":false,"reply":"...","messages":[...]}
+```
+
+### Setup
+
+Because this endpoint makes paid, per-request Fireworks calls (with potentially several
+tool-calling round trips) and the rest of the API is otherwise open with no auth, it requires two
+secrets that aren't needed for anything else here:
+
+- `FIREWORKS_API_KEY` — your [Fireworks account](https://fireworks.ai) API key.
+- `CHAT_API_KEY` — a shared secret of your choosing; callers must send it as the `X-Api-Key`
+  header. Generate one yourself, e.g. `openssl rand -hex 32`.
+
+Add both as **GitHub Actions repository secrets** on this repo (same place as `FTP_HOST` etc.) —
+`deploy.yml` writes them into a `.env` file at the repo root on every deploy (outside `public/`,
+so it's never web-accessible), which `src/Http/Env.php` loads at request time via `getenv()`. If
+either is missing/empty, `/api/v1/chat` responds with `{"error":true,"errorMessage":"Chat is not
+configured on this server."}` instead of failing open — every other endpoint is unaffected.
+
+For local development, create a `.env` file at the repo root (gitignored, not deployed by CI)
+with the same two lines:
+
+```
+FIREWORKS_API_KEY=...
+CHAT_API_KEY=...
+```
+
+The model defaults to `accounts/fireworks/models/firefunction-v2` (Fireworks' model tuned
+specifically for reliable function calling); override it with a third `.env` line,
+`FIREWORKS_MODEL=accounts/fireworks/models/...`, to try another one.
+
 ## Project structure
 
-- `public/index.php` - front controller; defines all routes and maps HTTP params onto
-  `CalculatorApi` calls.
+- `public/index.php` - front controller; defines all routes (each a thin call into
+  `Http\Operations`) plus the `/api/v1/chat` route.
+- `src/Http/Operations.php` - one method per REST endpoint: parses/defaults that endpoint's
+  params and calls the matching calculator method. Shared by `public/index.php` (as REST route
+  handlers) and `Chat\Tools` (as tool-calling handlers), so both stay in sync by construction.
+- `src/Http/Router.php` - a minimal method+path router used by `public/index.php`.
+- `src/Http/Env.php` - minimal `.env` file loader (no external dependency); see
+  [Chat agent](#chat-agent).
 - `src/Calculator/CalculatorApi.php` - the ported calculator methods.
 - `src/Calculator/GravityCalculator.php` - gravity/ABV unit conversions and the
   `potentialAlcohol` solver, ported from `GravityCalculator.js`.
@@ -137,6 +194,10 @@ curl -s http://localhost:8000/api/v1/volume/convert \
   ported from `BatchCalculator.js`.
 - `src/Calculator/Constants.php` - unit tables, error-type codes, and sugar-source data, ported
   from `CalculatorAPI.Constants.js`.
-- `src/Http/Router.php` - a minimal method+path router used by `public/index.php`.
+- `src/Chat/Tools.php` - OpenAI-style tool schemas for the chat agent, dispatching to
+  `Http\Operations`.
+- `src/Chat/FireworksClient.php` - minimal client for Fireworks' OpenAI-compatible
+  chat-completions endpoint.
+- `src/Chat/ChatAgent.php` - the tool-calling loop used by `/api/v1/chat`.
 - `tests/` - PHPUnit tests, run with `composer test`.
 - `public/docs/` - OpenAPI spec and Swagger UI, served at `/docs`.

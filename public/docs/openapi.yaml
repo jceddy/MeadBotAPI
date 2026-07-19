@@ -28,6 +28,7 @@ tags:
   - name: Sugar sources
   - name: Dates
   - name: Misc
+  - name: Chat
 
 paths:
   /health:
@@ -1178,7 +1179,81 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
 
+  /chat:
+    post:
+      tags: [Chat]
+      summary: Chat with an LLM agent that has every calculation/lookup endpoint as a tool
+      description: >
+        Runs one turn of a tool-calling chat loop against Fireworks AI (an OpenAI-compatible
+        chat-completions API): sends `messages` plus tool definitions for every endpoint above
+        except `/health` and `/random`, executes whichever tools the model calls locally (no
+        HTTP round-trip — it calls the same code the corresponding REST route does), feeds the
+        results back to the model, and repeats until it replies with plain text. Requires the
+        `X-Api-Key` header. Pass the returned `messages` array back in as the next request's
+        `messages` (with a new user turn appended) to continue the conversation — this endpoint
+        is stateless and keeps no server-side session.
+      operationId: chat
+      security:
+        - ChatApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messages]
+              properties:
+                messages:
+                  type: array
+                  description: >
+                    OpenAI-style conversation so far, e.g. starting with a system message and the
+                    user's latest message. Non-empty.
+                  items:
+                    type: object
+                    properties:
+                      role: { type: string, enum: [system, user, assistant, tool] }
+                      content: { type: string, nullable: true }
+              example:
+                messages:
+                  - role: user
+                    content: I have 5 gallons at 1.100 SG. What's my potential ABV?
+      responses:
+        '200':
+          description: Assistant reply, plus the full updated conversation.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      reply:
+                        type: string
+                        description: The final assistant message's text content.
+                      messages:
+                        type: array
+                        description: >
+                          The input messages plus every assistant/tool turn generated this
+                          request — pass this back as the next request's `messages`.
+                        items:
+                          type: object
+        '400':
+          description: >
+            Missing/invalid request, missing/invalid `X-Api-Key`, chat not configured on this
+            server (no `FIREWORKS_API_KEY`/`CHAT_API_KEY`), or a Fireworks API/network failure.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
 components:
+  securitySchemes:
+    ChatApiKey:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: Shared secret configured server-side as CHAT_API_KEY. Required only for POST /chat.
+
   parameters:
     UnitName:
       name: name
