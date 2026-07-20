@@ -1183,18 +1183,20 @@ paths:
   /chat:
     post:
       tags: [Chat]
-      summary: Chat with an LLM agent that has every calculation/lookup endpoint, plus a MeadTools wiki fetcher, as tools
+      summary: Chat with an LLM agent that has every calculation/lookup endpoint, plus two MeadTools wiki tools, as tools
       description: >
         Runs one turn of a tool-calling chat loop against Fireworks AI (an OpenAI-compatible
         chat-completions API): sends `messages` plus tool definitions for every endpoint above
         except `/health` and `/random` (each executed locally, no HTTP round-trip — it calls the
-        same code the corresponding REST route does) plus `fetch_meadtools_wiki_page`, which lets
-        the model fetch pages from wiki.meadtools.com (and follow links to other pages on that
-        same host) as an authoritative source for mead-making judgment calls that aren't pure
-        calculations. Feeds tool results back to the model and repeats until it replies with
-        plain text. Requires the `X-Api-Key` header. Pass the returned `messages` array back in
-        as the next request's `messages` (with a new user turn appended) to continue the
-        conversation — this endpoint is stateless and keeps no server-side session.
+        same code the corresponding REST route does) plus two tools for mead-making judgment
+        calls that aren't pure calculations: `list_meadtools_wiki_pages`, which returns a
+        hand-maintained index (title/url/keywords) of pages on wiki.meadtools.com so the model
+        can pick a relevant one directly, and `fetch_meadtools_wiki_page`, which fetches a page
+        from that same host (and can follow links to other pages on it) as an authoritative
+        source. Feeds tool results back to the model and repeats until it replies with plain
+        text. Requires the `X-Api-Key` header. Pass the returned `messages` array back in as the
+        next request's `messages` (with a new user turn appended) to continue the conversation —
+        this endpoint is stateless and keeps no server-side session.
       operationId: chat
       security:
         - ChatApiKey: []

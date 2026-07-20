@@ -24,6 +24,7 @@ final class MeadToolsWikiClient
     private const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
     private const MAX_TEXT_CHARS = 6000;
     private const MAX_LINKS = 40;
+    private const INDEX_PATH = __DIR__ . '/data/meadtools_wiki_index.json';
 
     /** @var callable(string): array{status: int, body: string, contentType: string, effectiveUrl: string} */
     private $transport;
@@ -31,6 +32,33 @@ final class MeadToolsWikiClient
     public function __construct(?callable $transport = null)
     {
         $this->transport = $transport ?? self::curlTransport(...);
+    }
+
+    /**
+     * index(path) - returns a hand-maintained index of wiki.meadtools.com pages (title, url,
+     * keywords) bundled with this app, so the model can pick a specific page to fetch directly
+     * by matching the question against titles/keywords, rather than crawling link-by-link from
+     * the home page (which was burning through the tool-call budget without reliably finding the
+     * relevant page). Static/manually updated, not re-crawled per request -- see this file's
+     * sibling data/meadtools_wiki_index.json and its "generated" field for freshness.
+     *
+     * @return array<string, mixed>
+     */
+    public static function index(?string $path = null): array
+    {
+        $path ??= self::INDEX_PATH;
+
+        $json = @file_get_contents($path);
+        if ($json === false) {
+            return ['error' => true, 'errorMessage' => 'The wiki page index is unavailable.'];
+        }
+
+        $decoded = json_decode($json, true);
+        if (!is_array($decoded)) {
+            return ['error' => true, 'errorMessage' => 'The wiki page index is malformed.'];
+        }
+
+        return ['error' => false] + $decoded;
     }
 
     /**

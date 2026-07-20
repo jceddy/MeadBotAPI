@@ -136,6 +136,23 @@ calls one, it's executed locally (the same `Http\Operations` method the matching
 calls, not an HTTP round-trip to this same API) and the result is fed back to the model, repeating
 until it replies with plain text.
 
+Two more tools, both in `Chat\MeadToolsWikiClient`, ground mead-making judgment calls (recipe
+design, technique, troubleshooting — as opposed to pure calculations) in
+[wiki.meadtools.com](https://wiki.meadtools.com/en/home) instead of the model's training data,
+which was observed giving bad advice on its own:
+
+- `list_meadtools_wiki_pages` returns a hand-maintained index (title/url/keywords) of pages on
+  that wiki, from `src/Chat/data/meadtools_wiki_index.json`, so the model can pick a relevant
+  page directly instead of crawling link-by-link from the home page (which reliably burned
+  through the tool-call iteration cap without finding the right page). The index is static and
+  updated by hand on no fixed schedule — regenerate it (title/url/keywords per page) and replace
+  that file whenever the wiki's content changes enough to matter; nothing here does that
+  automatically.
+- `fetch_meadtools_wiki_page` fetches a given page from that same host — restricted to
+  `wiki.meadtools.com` specifically, both on the requested URL and wherever it ends up after any
+  redirect, since an LLM-directed "fetch any URL" tool would otherwise be an SSRF risk — and
+  returns its readable text plus same-host links, for drilling into pages the index doesn't cover.
+
 This endpoint is stateless: it keeps no server-side session, so pass the `messages` array from
 the response back in as the next request's `messages` (with a new `{role: "user", ...}` turn
 appended) to continue a conversation.

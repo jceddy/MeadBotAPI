@@ -17,10 +17,10 @@ final class ToolsTest extends TestCase
         $definitions = Tools::definitions();
         self::assertNotEmpty($definitions);
 
-        // fetch_meadtools_wiki_page isn't Operations-backed -- it does network I/O, not a
-        // calculation -- so it's dispatched specially in Tools::call() rather than through
+        // The two MeadTools wiki tools aren't Operations-backed -- they do network/file I/O, not
+        // a calculation -- so they're dispatched specially in Tools::call() rather than through
         // TOOL_TO_OPERATION.
-        $nonOperationTools = ['fetch_meadtools_wiki_page'];
+        $nonOperationTools = ['list_meadtools_wiki_pages', 'fetch_meadtools_wiki_page'];
 
         $names = [];
         foreach ($definitions as $definition) {
@@ -41,7 +41,7 @@ final class ToolsTest extends TestCase
         }
 
         self::assertSame($names, array_unique($names), 'tool names must be unique');
-        self::assertCount(23, $definitions, 'expected one tool per Operations method (except health/random), plus fetch_meadtools_wiki_page');
+        self::assertCount(24, $definitions, 'expected one tool per Operations method (except health/random), plus the two MeadTools wiki tools');
     }
 
     private static function operationFor(string $toolName): string
@@ -101,5 +101,15 @@ final class ToolsTest extends TestCase
         $result = Tools::call('fetch_meadtools_wiki_page', ['url' => 'https://evil.example.com/']);
         self::assertTrue($result['error']);
         self::assertStringContainsString('wiki.meadtools.com', $result['errorMessage']);
+    }
+
+    public function testCallDispatchesListMeadtoolsWikiPages(): void
+    {
+        $result = Tools::call('list_meadtools_wiki_pages', []);
+
+        self::assertFalse($result['error']);
+        self::assertIsArray($result['pages']);
+        self::assertNotEmpty($result['pages']);
+        self::assertSame('https://wiki.meadtools.com/en/home', $result['pages'][0]['url']);
     }
 }
