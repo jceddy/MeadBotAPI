@@ -99,6 +99,7 @@ route called with the wrong HTTP method, and `200` otherwise.
 | POST | `/api/v1/chat` | `messages` (OpenAI-style conversation). Requires header `X-Api-Key`. | — (see [Chat agent](#chat-agent)) |
 | GET | `/api/v1/balance` | — . Requires header `X-Api-Key`. | — (see [Balance ledger](#balance-ledger)) |
 | POST | `/api/v1/balance/deposits` | `amountUsd`, `note` (optional). Requires header `X-Api-Key`. | — (see [Balance ledger](#balance-ledger)) |
+| GET | `/api/v1/balance/usage-by-user` | — . Requires header `X-Api-Key`. | — (see [Per-user usage](#per-user-usage)) |
 
 \* `/potential-alcohol` mirrors the *intent* of MeadBot's `!potential-alcohol` command. That
 command originally had two bugs — a specified value that happened to equal its default being
@@ -218,6 +219,26 @@ curl -s -H 'X-Api-Key: <CHAT_API_KEY>' http://localhost:8000/api/v1/balance
 Fireworks' own billing dashboard) — there's no separate "adjustments" concept, just deposits that
 happen to be negative.
 
+### Per-user usage
+
+Pass an optional `X-User-Id` header on `POST /api/v1/chat` to tag that request's usage row with a
+caller-supplied identifier (opaque to this app — not validated, not sent to Fireworks). Omit it
+and the row is grouped under a `null` user. `GET /api/v1/balance/usage-by-user` returns per-user
+totals, ordered by total cost descending — this is what answers "who's using chat the most," and
+is the data future per-user rate-limiting would build on (not implemented yet — this endpoint is
+tracking/reporting only, same as the rest of the ledger).
+
+```
+curl -s -X POST http://localhost:8000/api/v1/chat \
+  -H 'Content-Type: application/json' \
+  -H 'X-Api-Key: <CHAT_API_KEY>' \
+  -H 'X-User-Id: alice' \
+  -d '{"messages": [{"role": "user", "content": "..."}]}'
+
+curl -s -H 'X-Api-Key: <CHAT_API_KEY>' http://localhost:8000/api/v1/balance/usage-by-user
+# {"error":false,"usageByUser":[{"userId":"alice","requestCount":12,"totalUsageUsd":0.34,"totalTokens":48213,"lastUsedAt":"2026-07-19 23:58:56"}, ...]}
+```
+
 ### Setup
 
 Requires four secrets, none needed by anything else here:
@@ -228,8 +249,8 @@ Requires four secrets, none needed by anything else here:
 Add all four as **GitHub Actions repository secrets** (same place as `FTP_HOST` etc.) —
 `deploy.yml` writes them into the same `.env` file as the chat secrets. If any is missing, `/chat`
 still works exactly as before (usage-logging silently no-ops rather than failing the request), but
-`/balance` and `/balance/deposits` respond with `{"error":true,"errorMessage":"The balance
-database is not configured on this server."}`.
+`/balance`, `/balance/deposits`, and `/balance/usage-by-user` respond with
+`{"error":true,"errorMessage":"The balance database is not configured on this server."}`.
 
 **Schema changes are never applied automatically** — neither this session nor GitHub Actions has
 network access to the database. Numbered SQL files under `migrations/` describe each schema
@@ -238,6 +259,7 @@ change; apply them yourself, in order, against the database identified by the fo
 ```
 mysql --host=<MYSQL_DB_HOST> --user=<MYSQL_DB_USERNAME> -p <MYSQL_DB_DATABASE> < migrations/0001_create_chat_usage.sql
 mysql --host=<MYSQL_DB_HOST> --user=<MYSQL_DB_USERNAME> -p <MYSQL_DB_DATABASE> < migrations/0002_create_balance_deposits.sql
+mysql --host=<MYSQL_DB_HOST> --user=<MYSQL_DB_USERNAME> -p <MYSQL_DB_DATABASE> < migrations/0003_add_user_id_to_chat_usage.sql
 ```
 
 For local development, add the same four lines to your `.env` file (gitignored, not deployed by

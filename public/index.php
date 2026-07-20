@@ -105,6 +105,13 @@ $router->post('/api/v1/chat', function (array $p) {
         return ['error' => true, 'errorMessage' => 'messages must be a non-empty array of {role, content} objects.'];
     }
 
+    // Optional caller-supplied identifier, purely for usage tracking (see
+    // GET /api/v1/balance/usage-by-user) — opaque to this endpoint, not sent to Fireworks.
+    $userId = $_SERVER['HTTP_X_USER_ID'] ?? null;
+    if ($userId !== null && trim($userId) === '') {
+        $userId = null;
+    }
+
     $model = getenv('FIREWORKS_MODEL') ?: 'accounts/fireworks/models/gpt-oss-120b';
     $agent = new ChatAgent(new FireworksClient($fireworksKey, $model));
     $pricing = fireworksPricing();
@@ -117,7 +124,7 @@ $router->post('/api/v1/chat', function (array $p) {
         // though the request as a whole didn't complete — surface usage/cost here too so the
         // ledger doesn't silently miss it.
         $costUsd = $pricing->costUsd($e->usage);
-        $ledger->recordChatUsage($e->usage, $costUsd, $model, false, $e->getMessage());
+        $ledger->recordChatUsage($e->usage, $costUsd, $model, false, $e->getMessage(), $userId);
         return [
             'error' => true,
             'errorMessage' => 'Chat backend error: ' . $e->getMessage(),
@@ -127,7 +134,7 @@ $router->post('/api/v1/chat', function (array $p) {
     }
 
     $costUsd = $pricing->costUsd($result['usage']);
-    $ledger->recordChatUsage($result['usage'], $costUsd, $model, true, null);
+    $ledger->recordChatUsage($result['usage'], $costUsd, $model, true, null, $userId);
 
     return [
         'error' => false,
@@ -174,6 +181,21 @@ $router->get('/api/v1/balance', function () {
     }
 
     return ['error' => false, 'balance' => $balance];
+});
+
+$router->get('/api/v1/balance/usage-by-user', function () {
+    if ($authError = requireChatApiKey()) {
+        return $authError;
+    }
+
+    $ledger = Ledger::connect();
+    try {
+        $usageByUser = $ledger->usageByUser();
+    } catch (\RuntimeException $e) {
+        return ['error' => true, 'errorMessage' => $e->getMessage()];
+    }
+
+    return ['error' => false, 'usageByUser' => $usageByUser];
 });
 
 // --- dispatch ---

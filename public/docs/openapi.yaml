@@ -1196,6 +1196,17 @@ paths:
       operationId: chat
       security:
         - ChatApiKey: []
+      parameters:
+        - name: X-User-Id
+          in: header
+          required: false
+          description: >
+            Optional caller-supplied identifier, recorded against this request's usage row for
+            per-user reporting (see GET /balance/usage-by-user). Opaque to this endpoint — not
+            validated against any user system, and never sent to Fireworks.
+          schema:
+            type: string
+          example: alice
       requestBody:
         required: true
         content:
@@ -1294,6 +1305,54 @@ paths:
             Missing/invalid `X-Api-Key`, or the balance database isn't configured
             (`MYSQL_DB_HOST`/`MYSQL_DB_DATABASE`/`MYSQL_DB_USERNAME`/`MYSQL_DB_PASSWORD`) or
             reachable on this server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /balance/usage-by-user:
+    get:
+      tags: [Balance]
+      summary: Per-user chat usage totals, ordered by total cost descending
+      description: >
+        One row per distinct `X-User-Id` value seen on POST /chat requests (a `userId` of `null`
+        groups every request that omitted the header), including failed requests (which may have
+        zero usage/cost). Requires the `X-Api-Key` header.
+      operationId: getUsageByUser
+      security:
+        - ChatApiKey: []
+      responses:
+        '200':
+          description: Per-user usage totals.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      usageByUser:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            userId:
+                              type: string
+                              nullable: true
+                              description: The X-User-Id header value, or null for requests that omitted it.
+                            requestCount:
+                              type: integer
+                            totalUsageUsd:
+                              type: number
+                            totalTokens:
+                              type: integer
+                            lastUsedAt:
+                              type: string
+                              description: Timestamp of this user's most recent request.
+        '400':
+          description: >
+            Missing/invalid `X-Api-Key`, or the balance database isn't configured/reachable on
+            this server.
           content:
             application/json:
               schema:
