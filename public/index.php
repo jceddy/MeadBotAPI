@@ -4,495 +4,198 @@ declare(strict_types=1);
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
-use MeadBotApi\Calculator\BatchCalculator;
-use MeadBotApi\Calculator\BlendCalculator;
-use MeadBotApi\Calculator\CalculatorApi;
-use MeadBotApi\Calculator\Constants;
-use MeadBotApi\Calculator\GravityCalculator;
-use MeadBotApi\Calculator\NutrientCalculator;
+use MeadBotApi\Chat\ChatAgent;
+use MeadBotApi\Chat\ChatUsageException;
+use MeadBotApi\Chat\CostCalculator;
+use MeadBotApi\Chat\FireworksClient;
+use MeadBotApi\Http\Env;
+use MeadBotApi\Http\Operations;
 use MeadBotApi\Http\Router;
+use MeadBotApi\Ledger\Ledger;
 
-/** Fetch a required param, throwing a 400-mappable exception if it's missing. */
-function requireParam(array $params, string $name): mixed
+Env::load(dirname(__DIR__) . '/.env');
+
+/** Shared by /chat and /balance/*: checks X-Api-Key against CHAT_API_KEY. Returns an error array to short-circuit the route, or null when authorized. */
+function requireChatApiKey(): ?array
 {
-    if (!array_key_exists($name, $params) || $params[$name] === null || $params[$name] === '') {
-        throw new InvalidArgumentException("Missing required parameter: {$name}");
+    $apiKey = getenv('CHAT_API_KEY');
+    if ($apiKey === false || $apiKey === '') {
+        return ['error' => true, 'errorMessage' => 'This endpoint is not configured on this server.'];
     }
-    return $params[$name];
-}
-
-function optionalParam(array $params, string $name, mixed $default = null): mixed
-{
-    if (!array_key_exists($name, $params) || $params[$name] === null || $params[$name] === '') {
-        return $default;
+    $provided = $_SERVER['HTTP_X_API_KEY'] ?? '';
+    if (!hash_equals($apiKey, $provided)) {
+        return ['error' => true, 'errorMessage' => 'Missing or invalid X-Api-Key header.'];
     }
-    return $params[$name];
-}
-
-function requireNumeric(array $params, string $name): float
-{
-    $value = requireParam($params, $name);
-    if (!is_numeric($value)) {
-        throw new InvalidArgumentException("Parameter '{$name}' must be numeric.");
-    }
-    return (float) $value;
-}
-
-function optionalNumeric(array $params, string $name): ?float
-{
-    $value = optionalParam($params, $name);
-    if ($value === null) {
-        return null;
-    }
-    if (!is_numeric($value)) {
-        throw new InvalidArgumentException("Parameter '{$name}' must be numeric.");
-    }
-    return (float) $value;
-}
-
-function requireDate(array $params, string $name): DateTimeImmutable
-{
-    $value = requireParam($params, $name);
-    $date = date_create_immutable((string) $value);
-    if ($date === false) {
-        throw new InvalidArgumentException("Parameter '{$name}' must be a parseable date/time string.");
-    }
-    return $date;
-}
-
-/** Wrap a nullable-int lookup result in the same {error, ...} envelope the calculation methods use. */
-function lookupResult(?int $id, string $notFoundMessage, array $extra = []): array
-{
-    if ($id === null) {
-        return [
-            'error' => true,
-            'errorMessage' => $notFoundMessage,
-            'errorType' => \MeadBotApi\Calculator\Constants::ERROR_INVALID_ARGUMENTS,
-            'errorTypeLabel' => 'invalid arguments',
-        ];
-    }
-    return array_merge(['error' => false, 'unitId' => $id], $extra);
-}
-
-function parseGravityUnits(?string $value): int
-{
-    return match ($value) {
-        null, 'sg' => Constants::GRAVITY_UNIT_SG,
-        'brix' => Constants::GRAVITY_UNIT_BRIX,
-        'baume' => Constants::GRAVITY_UNIT_BAUME,
-        default => throw new InvalidArgumentException("Unknown gravity units: {$value}"),
-    };
-}
-
-function parseAbvUnits(?string $value): int
-{
-    return match ($value) {
-        null, 'abv' => Constants::ABV_UNIT_ABV,
-        'abw' => Constants::ABV_UNIT_ABW,
-        default => throw new InvalidArgumentException("Unknown abv units: {$value}"),
-    };
-}
-
-function parseBlendField(string $value): int
-{
-    return match ($value) {
-        'value1' => Constants::BLEND_FIELD_VALUE1,
-        'value2' => Constants::BLEND_FIELD_VALUE2,
-        'blended_value' => Constants::BLEND_FIELD_BLENDED_VALUE,
-        'volume1' => Constants::BLEND_FIELD_VOLUME1,
-        'volume2' => Constants::BLEND_FIELD_VOLUME2,
-        'total_volume' => Constants::BLEND_FIELD_TOTAL_VOLUME,
-        default => throw new InvalidArgumentException("Unknown fieldToCalculate: {$value}"),
-    };
-}
-
-function parseUnits(?string $value): int
-{
-    return match ($value) {
-        null, 'us' => Constants::UNITS_US,
-        'metric' => Constants::UNITS_METRIC,
-        'imperial' => Constants::UNITS_IMPERIAL,
-        default => throw new InvalidArgumentException("Unknown units: {$value}"),
-    };
-}
-
-function parseYanRequirement(?string $value): int
-{
-    return match ($value) {
-        'very_low' => Constants::YAN_REQUIREMENT_VERY_LOW,
-        null, 'medium' => Constants::YAN_REQUIREMENT_MEDIUM,
-        'low' => Constants::YAN_REQUIREMENT_LOW,
-        'high' => Constants::YAN_REQUIREMENT_HIGH,
-        'kveik' => Constants::YAN_REQUIREMENT_KVEIK,
-        default => throw new InvalidArgumentException("Unknown yanRequirement: {$value}"),
-    };
-}
-
-function parseNutrientRegimen(?string $value): int
-{
-    return match ($value) {
-        'tosna' => Constants::NUTRIENT_REGIMEN_TOSNA,
-        'k_dap' => Constants::NUTRIENT_REGIMEN_K_DAP,
-        null, 'blount_elliott', 'blount_elliot' => Constants::NUTRIENT_REGIMEN_BLOUNT_ELLIOTT,
-        'tosna_k' => Constants::NUTRIENT_REGIMEN_TOSNA_K,
-        'o_k' => Constants::NUTRIENT_REGIMEN_O_K,
-        'advanced' => Constants::NUTRIENT_REGIMEN_ADVANCED,
-        default => throw new InvalidArgumentException("Unknown nutrientRegimen: {$value}"),
-    };
-}
-
-function parseVolumeUnits(string $value): int
-{
-    $id = CalculatorApi::getVolumeUnit($value);
-    if ($id === null) {
-        throw new InvalidArgumentException("Unknown volume units: {$value}");
-    }
-    return $id;
-}
-
-function parseTemperatureUnits(string $value): int
-{
-    return match ($value) {
-        'c', 'celsius', 'celcius' => Constants::TEMPERATURE_UNIT_CELSIUS,
-        'f', 'fahrenheit' => Constants::TEMPERATURE_UNIT_FAHRENHEIT,
-        default => throw new InvalidArgumentException("Unknown temperature units: {$value}"),
-    };
+    return null;
 }
 
 /**
- * Validates and normalizes an optional array of additional-sugar specifications for
- * calculate-mead into the shape BatchCalculator::calculateMead expects. Each entry's `type` and
- * `quantityUnits` are resolved via the same lookups as the sugar-sources/honey-units endpoints;
- * `sugarContent`/`yanMultiplier` default to that sugar source's known values when omitted (unlike
- * the MeadBot command, which always defaults sugar_content to honey's regardless of type unless
- * explicitly overridden — a quirk not worth reproducing on a fresh endpoint).
- *
- * @return array<int, array<string, mixed>>|null
+ * gpt-oss-120b's published per-1M-token pricing by default; override via .env if FIREWORKS_MODEL
+ * is ever changed to a model with different rates.
  */
-function parseAdditionalSugars(mixed $value): ?array
+function fireworksPricing(): CostCalculator
 {
-    if ($value === null) {
-        return null;
-    }
-    if (!is_array($value)) {
-        throw new InvalidArgumentException('additionalSugars must be an array.');
-    }
-
-    $sugars = [];
-    foreach (array_values($value) as $i => $entry) {
-        if (!is_array($entry)) {
-            throw new InvalidArgumentException("additionalSugars[{$i}] must be an object.");
-        }
-        $typeName = (string) requireParam($entry, 'type');
-        $type = CalculatorApi::getSugarSourceIdentifier($typeName);
-        if ($type === null) {
-            throw new InvalidArgumentException("additionalSugars[{$i}]: unknown sugar type: {$typeName}");
-        }
-        $quantityUnitsName = (string) requireParam($entry, 'quantityUnits');
-        $quantityUnits = CalculatorApi::getHoneyUnit($quantityUnitsName);
-        if ($quantityUnits === null) {
-            throw new InvalidArgumentException("additionalSugars[{$i}]: unknown quantityUnits: {$quantityUnitsName}");
-        }
-
-        $quantityAmount = optionalNumeric($entry, 'quantityAmount');
-        $sugarContent = optionalNumeric($entry, 'sugarContent') ?? Constants::SUGAR_SOURCE_INFO[$type]['percent'];
-        $yanMultiplier = optionalNumeric($entry, 'yanMultiplier') ?? Constants::SUGAR_SOURCE_INFO[$type]['yan'];
-        $additive = filter_var(optionalParam($entry, 'additive', false), FILTER_VALIDATE_BOOLEAN);
-
-        if ($additive && $quantityAmount === null) {
-            throw new InvalidArgumentException("additionalSugars[{$i}]: quantityAmount is required when additive is true.");
-        }
-
-        $sugars[] = [
-            'type' => $type,
-            'quantity_amount' => $quantityAmount ?? 0.0,
-            'quantity_amount_specified' => $quantityAmount !== null,
-            'quantity_units' => $quantityUnits,
-            'sugar_content' => $sugarContent,
-            'yan_multiplier' => $yanMultiplier,
-            'additive' => $additive,
-        ];
-    }
-    return $sugars;
-}
-
-/**
- * Validates an optional SNA schedule: each element must be the string "pitch" (only as the
- * first element), the string "break", or a number in [1, 500].
- *
- * @return array<int, int|string>|null
- */
-function parseSnaSchedule(mixed $value): ?array
-{
-    if ($value === null) {
-        return null;
-    }
-    if (!is_array($value)) {
-        throw new InvalidArgumentException('snaScheduleOverride must be an array.');
-    }
-
-    $schedule = [];
-    foreach (array_values($value) as $i => $part) {
-        if ($part === 'pitch') {
-            if ($i !== 0) {
-                throw new InvalidArgumentException('"pitch" can only be the first item in snaScheduleOverride.');
-            }
-            $schedule[] = 'pitch';
-        } elseif ($part === 'break') {
-            $schedule[] = 'break';
-        } elseif (is_numeric($part)) {
-            $num = (int) $part;
-            if ($num < 1 || $num > 500) {
-                throw new InvalidArgumentException("snaScheduleOverride value out of range: {$num}");
-            }
-            $schedule[] = $num;
-        } else {
-            throw new InvalidArgumentException('Invalid snaScheduleOverride value: ' . json_encode($part));
-        }
-    }
-    return $schedule;
+    return new CostCalculator(
+        (float) (getenv('FIREWORKS_PRICE_INPUT_PER_1M') ?: 0.15),
+        (float) (getenv('FIREWORKS_PRICE_CACHED_INPUT_PER_1M') ?: 0.01),
+        (float) (getenv('FIREWORKS_PRICE_OUTPUT_PER_1M') ?: 0.60)
+    );
 }
 
 $router = new Router();
 
-$router->get('/api/v1/health', fn () => ['error' => false, 'status' => 'ok']);
+$router->get('/api/v1/health', fn () => Operations::health());
 
 // Calories
-$router->post('/api/v1/calories', fn (array $p) => CalculatorApi::calculateCalories(
-    requireParam($p, 'percentAlcohol'),
-    requireParam($p, 'fg'),
-    requireParam($p, 'bottleVolume'),
-    requireParam($p, 'servingVolume')
-));
+$router->post('/api/v1/calories', fn (array $p) => Operations::calculateCalories($p));
 
 // ABV
-$router->post('/api/v1/abv', function (array $p) {
-    $og = requireParam($p, 'og');
-    $fg = optionalParam($p, 'fg');
-    return CalculatorApi::calculateABV($og, $fg);
-});
-
-$router->post('/api/v1/gravity-drop-to-abv', function (array $p) {
-    $sgDelta = requireNumeric($p, 'sgDelta');
-    return ['error' => false, 'sgDelta' => $sgDelta, 'abv' => CalculatorApi::convertGravityDropToABV($sgDelta)];
-});
-
-$router->post('/api/v1/dry-fg', function (array $p) {
-    $og = requireNumeric($p, 'og');
-    return ['error' => false, 'og' => $og, 'fg' => CalculatorApi::estimateDryFG($og)];
-});
+$router->post('/api/v1/abv', fn (array $p) => Operations::calculateABV($p));
+$router->post('/api/v1/gravity-drop-to-abv', fn (array $p) => Operations::convertGravityDropToABV($p));
+$router->post('/api/v1/dry-fg', fn (array $p) => Operations::estimateDryFG($p));
 
 // Volume units / conversion
-$router->get('/api/v1/volume-units', fn () => ['error' => false, 'volumeUnits' => CalculatorApi::listVolumeUnits()]);
-
-$router->get('/api/v1/volume-units/{name}', fn (array $p) => lookupResult(
-    CalculatorApi::getVolumeUnit($p['name']),
-    'Unknown volume unit: ' . $p['name']
-));
-
-$router->post('/api/v1/volume/convert', fn (array $p) => CalculatorApi::convertVolume(
-    requireParam($p, 'amount'),
-    (string) requireParam($p, 'fromUnit'),
-    (string) requireParam($p, 'toUnit')
-));
+$router->get('/api/v1/volume-units', fn () => Operations::listVolumeUnits());
+$router->get('/api/v1/volume-units/{name}', fn (array $p) => Operations::getVolumeUnit($p));
+$router->post('/api/v1/volume/convert', fn (array $p) => Operations::convertVolume($p));
 
 // Honey units / conversion
-$router->get('/api/v1/honey-units/{name}', fn (array $p) => lookupResult(
-    CalculatorApi::getHoneyUnit($p['name']),
-    'Unknown honey unit: ' . $p['name']
-));
-
-$router->post('/api/v1/honey/convert', fn (array $p) => CalculatorApi::convertHoneyUnits(
-    requireParam($p, 'amount'),
-    (string) requireParam($p, 'fromUnit'),
-    (string) requireParam($p, 'toUnit')
-));
+$router->get('/api/v1/honey-units/{name}', fn (array $p) => Operations::getHoneyUnit($p));
+$router->post('/api/v1/honey/convert', fn (array $p) => Operations::convertHoneyUnits($p));
 
 // Temperature conversion
-$router->post('/api/v1/temperature/convert', fn (array $p) => CalculatorApi::convertTemperature(
-    requireParam($p, 'fromTemperature'),
-    (string) requireParam($p, 'fromUnit')
-));
+$router->post('/api/v1/temperature/convert', fn (array $p) => Operations::convertTemperature($p));
 
 // Gravity / Delle
-$router->post('/api/v1/sg-to-brix', function (array $p) {
-    $sg = requireNumeric($p, 'sg');
-    return ['error' => false, 'sg' => $sg, 'brix' => CalculatorApi::convertSGToBrix($sg)];
-});
+$router->post('/api/v1/sg-to-brix', fn (array $p) => Operations::convertSGToBrix($p));
+$router->post('/api/v1/delle', fn (array $p) => Operations::computeDelle($p));
+$router->post('/api/v1/potential-alcohol', fn (array $p) => Operations::potentialAlcohol($p));
 
-$router->post('/api/v1/delle', fn (array $p) => CalculatorApi::computeDelle(
-    requireParam($p, 'abv'),
-    requireParam($p, 'sg')
-));
+$router->post('/api/v1/calculate-blend', fn (array $p) => Operations::calculateBlend($p));
+$router->post('/api/v1/calculate-nutrients', fn (array $p) => Operations::calculateNutrients($p));
+$router->post('/api/v1/build-batch', fn (array $p) => Operations::buildBatch($p));
+$router->post('/api/v1/calculate-mead', fn (array $p) => Operations::calculateMead($p));
 
-$router->post('/api/v1/potential-alcohol', function (array $p) {
-    $gravityUnits = parseGravityUnits(optionalParam($p, 'gravityUnits'));
-    $abvUnits = parseAbvUnits(optionalParam($p, 'abvUnits'));
-    $og = optionalParam($p, 'og');
-    $fg = optionalParam($p, 'fg');
-    $abv = optionalParam($p, 'abv');
-
-    if ($og === null && $fg === null && $abv === null) {
-        throw new InvalidArgumentException('At least one of og, fg, or abv must be specified.');
-    }
-    foreach (['og' => $og, 'fg' => $fg, 'abv' => $abv] as $name => $value) {
-        if ($value !== null && !is_numeric($value)) {
-            throw new InvalidArgumentException("Parameter '{$name}' must be numeric.");
-        }
-    }
-
-    return GravityCalculator::potentialAlcohol(
-        $gravityUnits,
-        $abvUnits,
-        $og === null ? null : (float) $og,
-        $fg === null ? null : (float) $fg,
-        $abv === null ? null : (float) $abv
-    );
-});
-
-$router->post('/api/v1/calculate-blend', fn (array $p) => BlendCalculator::calculateBlend(
-    parseBlendField((string) requireParam($p, 'fieldToCalculate')),
-    optionalNumeric($p, 'value1'),
-    optionalNumeric($p, 'value2'),
-    optionalNumeric($p, 'blendedValue'),
-    optionalNumeric($p, 'volume1'),
-    optionalNumeric($p, 'volume2'),
-    optionalNumeric($p, 'totalVolume')
-));
-
-$router->post('/api/v1/calculate-nutrients', function (array $p) {
-    $units = parseUnits(optionalParam($p, 'units'));
-    $volume = optionalNumeric($p, 'volume') ?? ($units === Constants::UNITS_US ? 5.0 : 18.9);
-
-    return NutrientCalculator::calculateNutrients([
-        'units' => $units,
-        'volume' => $volume,
-        'yan' => optionalNumeric($p, 'yan') ?? 175.0,
-        'fermOEffectiveness' => optionalNumeric($p, 'fermOEffectiveness') ?? 2.6,
-        'enforceLimits' => filter_var(optionalParam($p, 'enforceLimits', true), FILTER_VALIDATE_BOOLEAN),
-        'dapLimit' => optionalNumeric($p, 'dapLimit') ?? 0.96,
-        'fermKLimit' => optionalNumeric($p, 'fermKLimit') ?? 0.5,
-        'fermOLimit' => optionalNumeric($p, 'fermOLimit') ?? 0.45,
-        'yanRatioDap' => optionalNumeric($p, 'yanRatioDap') ?? 35.0,
-        'yanRatioFermK' => optionalNumeric($p, 'yanRatioFermK') ?? 25.0,
-        'yanRatioFermO' => optionalNumeric($p, 'yanRatioFermO') ?? 40.0,
-        'fermKYan' => optionalNumeric($p, 'fermKYan') ?? 134.0,
-        'fillFkFirst' => filter_var(optionalParam($p, 'fillFkFirst', true), FILTER_VALIDATE_BOOLEAN),
-        'gofermYan' => optionalNumeric($p, 'gofermYan') ?? 77.0,
-        'gofermGrams' => optionalNumeric($p, 'gofermGrams') ?? 0.0,
-    ]) + ['error' => false];
-});
-
-$router->post('/api/v1/build-batch', function (array $p) {
-    $units = parseUnits(optionalParam($p, 'units'));
-    $volume = optionalNumeric($p, 'volume') ?? ($units === Constants::UNITS_US ? 5.0 : 18.9);
-
-    return BatchCalculator::buildBatch([
-        'units' => $units,
-        'volume' => $volume,
-        'yeastAbv' => optionalNumeric($p, 'yeastAbv') ?? 18.0,
-        'residualSugar' => optionalNumeric($p, 'residualSugar') ?? 1.02,
-        'yanRequirement' => parseYanRequirement(optionalParam($p, 'yanRequirement')),
-        'nutrientRegimen' => parseNutrientRegimen(optionalParam($p, 'nutrientRegimen')),
-        'ogOverride' => optionalNumeric($p, 'ogOverride') ?? 0.0,
-        'pitchRateOverride' => optionalNumeric($p, 'pitchRateOverride') ?? 0.0,
-        'fruitSg' => optionalNumeric($p, 'fruitSg') ?? 0.0,
-        'yanOverride' => optionalNumeric($p, 'yanOverride') ?? 0.0,
-        'fermOEffectiveness' => optionalNumeric($p, 'fermOEffectiveness') ?? 2.6,
-        'enforceLimits' => filter_var(optionalParam($p, 'enforceLimits', true), FILTER_VALIDATE_BOOLEAN),
-        'dapLimit' => optionalNumeric($p, 'dapLimit') ?? 0.96,
-        'fermKLimit' => optionalNumeric($p, 'fermKLimit') ?? 0.5,
-        'fermOLimit' => optionalNumeric($p, 'fermOLimit') ?? 0.45,
-        'yanRatioDap' => optionalNumeric($p, 'yanRatioDap') ?? 35.0,
-        'yanRatioFermK' => optionalNumeric($p, 'yanRatioFermK') ?? 25.0,
-        'yanRatioFermO' => optionalNumeric($p, 'yanRatioFermO') ?? 40.0,
-        'fermKYan' => optionalNumeric($p, 'fermKYan') ?? 134.0,
-        'gofermYan' => optionalNumeric($p, 'gofermYan') ?? 77.0,
-        'fillFkFirst' => filter_var(optionalParam($p, 'fillFkFirst', true), FILTER_VALIDATE_BOOLEAN),
-        'hot' => filter_var(optionalParam($p, 'hot', false), FILTER_VALIDATE_BOOLEAN),
-        'snaScheduleOverride' => parseSnaSchedule(optionalParam($p, 'snaScheduleOverride')),
-    ]);
-});
-
-$router->post('/api/v1/calculate-mead', function (array $p) {
-    $units = parseUnits(optionalParam($p, 'units'));
-
-    return BatchCalculator::calculateMead([
-        'units' => $units,
-        'mustTemperature' => optionalNumeric($p, 'mustTemperature'),
-        'mustTemperatureUnits' => isset($p['mustTemperatureUnits']) ? parseTemperatureUnits((string) $p['mustTemperatureUnits']) : null,
-        'targetGravity' => optionalNumeric($p, 'targetGravity'),
-        'targetGravityUnits' => isset($p['targetGravityUnits']) ? parseGravityUnits((string) $p['targetGravityUnits']) : null,
-        'targetAbv' => optionalNumeric($p, 'targetAbv'),
-        'targetAbvUnits' => isset($p['targetAbvUnits']) ? parseAbvUnits((string) $p['targetAbvUnits']) : null,
-        'targetVolume' => optionalNumeric($p, 'targetVolume'),
-        'targetVolumeUnits' => isset($p['targetVolumeUnits']) ? parseVolumeUnits((string) $p['targetVolumeUnits']) : null,
-        'additionalSugars' => parseAdditionalSugars(optionalParam($p, 'additionalSugars')),
-        'currentGravity' => optionalNumeric($p, 'currentGravity'),
-        'currentGravityUnits' => isset($p['currentGravityUnits']) ? parseGravityUnits((string) $p['currentGravityUnits']) : null,
-        'currentVolume' => optionalNumeric($p, 'currentVolume'),
-        'currentVolumeUnits' => isset($p['currentVolumeUnits']) ? parseVolumeUnits((string) $p['currentVolumeUnits']) : null,
-        'targetStepFeedGravity' => optionalNumeric($p, 'targetStepFeedGravity'),
-        'yeastAbv' => optionalNumeric($p, 'yeastAbv') ?? 18.0,
-        'yanRequirement' => parseYanRequirement(optionalParam($p, 'yanRequirement')),
-        'hot' => filter_var(optionalParam($p, 'hot', false), FILTER_VALIDATE_BOOLEAN),
-        'calculateAdditiveHoney' => filter_var(optionalParam($p, 'calculateAdditiveHoney', false), FILTER_VALIDATE_BOOLEAN),
-        'fermOEffectiveness' => optionalNumeric($p, 'fermOEffectiveness') ?? 2.6,
-        'enforceLimits' => filter_var(optionalParam($p, 'enforceLimits', true), FILTER_VALIDATE_BOOLEAN),
-        'dapLimit' => optionalNumeric($p, 'dapLimit') ?? 0.96,
-        'fermKLimit' => optionalNumeric($p, 'fermKLimit') ?? 0.5,
-        'fermOLimit' => optionalNumeric($p, 'fermOLimit') ?? 0.45,
-        'yanRatioDap' => optionalNumeric($p, 'yanRatioDap') ?? 35.0,
-        'yanRatioFermK' => optionalNumeric($p, 'yanRatioFermK') ?? 25.0,
-        'yanRatioFermO' => optionalNumeric($p, 'yanRatioFermO') ?? 40.0,
-        'fermKYan' => optionalNumeric($p, 'fermKYan') ?? 134.0,
-        'gofermYan' => optionalNumeric($p, 'gofermYan') ?? 77.0,
-        'fillFkFirst' => filter_var(optionalParam($p, 'fillFkFirst', true), FILTER_VALIDATE_BOOLEAN),
-        'useGoferm' => filter_var(optionalParam($p, 'useGoferm', true), FILTER_VALIDATE_BOOLEAN),
-        'yeastPackGrams' => optionalNumeric($p, 'yeastPackGrams') ?? 5.0,
-    ]);
-});
-
-$router->get('/api/v1/yeast-requirements', fn () => [
-    'error' => false,
-    'yeastRequirements' => CalculatorApi::listYeastRequirements(),
-]);
+$router->get('/api/v1/yeast-requirements', fn () => Operations::listYeastRequirements());
 
 // Sugar sources
-$router->get('/api/v1/sugar-sources/{name}', function (array $p) {
-    $id = CalculatorApi::getSugarSourceIdentifier($p['name']);
-    $info = $id !== null ? \MeadBotApi\Calculator\Constants::SUGAR_SOURCE_INFO[$id] : null;
-    return lookupResult($id, 'Unknown sugar source: ' . $p['name'], $info !== null ? ['sugarSource' => $info] : []);
-});
+$router->get('/api/v1/sugar-sources/{name}', fn (array $p) => Operations::getSugarSourceIdentifier($p));
 
 // Dates
-$router->post('/api/v1/dates/days-between', function (array $p) {
-    $date1 = requireDate($p, 'date1');
-    $date2 = requireDate($p, 'date2');
-    return ['error' => false, 'daysBetween' => CalculatorApi::getDaysBetween($date1, $date2)];
-});
-
-$router->post('/api/v1/dates/months-between', function (array $p) {
-    $date1 = requireDate($p, 'date1');
-    $date2 = requireDate($p, 'date2');
-    $roundUp = filter_var(optionalParam($p, 'roundUpFractionalMonths', false), FILTER_VALIDATE_BOOLEAN);
-    return ['error' => false, 'monthsBetween' => CalculatorApi::getMonthsBetween($date1, $date2, $roundUp)];
-});
+$router->post('/api/v1/dates/days-between', fn (array $p) => Operations::getDaysBetween($p));
+$router->post('/api/v1/dates/months-between', fn (array $p) => Operations::getMonthsBetween($p));
 
 // Misc
-$router->get('/api/v1/random', function (array $p) {
-    $max = (int) requireNumeric($p, 'max');
-    return ['error' => false, 'max' => $max, 'value' => CalculatorApi::randomInteger($max)];
-});
+$router->get('/api/v1/random', fn (array $p) => Operations::randomInteger($p));
+$router->post('/api/v1/hours-string', fn (array $p) => Operations::makeHoursString($p));
 
-$router->post('/api/v1/hours-string', function (array $p) {
-    $timing = (string) requireParam($p, 'timing');
-    $break3 = optionalParam($p, 'break3');
+// Chat agent
+$router->post('/api/v1/chat', function (array $p) {
+    if ($authError = requireChatApiKey()) {
+        return $authError;
+    }
+
+    $fireworksKey = getenv('FIREWORKS_API_KEY');
+    if ($fireworksKey === false || $fireworksKey === '') {
+        return ['error' => true, 'errorMessage' => 'Chat is not configured on this server.'];
+    }
+
+    $messages = $p['messages'] ?? null;
+    if (!is_array($messages) || $messages === []) {
+        return ['error' => true, 'errorMessage' => 'messages must be a non-empty array of {role, content} objects.'];
+    }
+
+    // Optional caller-supplied identifier, purely for usage tracking (see
+    // GET /api/v1/balance/usage-by-user) — opaque to this endpoint, not sent to Fireworks.
+    $userId = $_SERVER['HTTP_X_USER_ID'] ?? null;
+    if ($userId !== null && trim($userId) === '') {
+        $userId = null;
+    }
+
+    $model = getenv('FIREWORKS_MODEL') ?: 'accounts/fireworks/models/gpt-oss-120b';
+    $agent = new ChatAgent(new FireworksClient($fireworksKey, $model));
+    $pricing = fireworksPricing();
+    $ledger = Ledger::connect();
+
+    try {
+        $result = $agent->run($messages);
+    } catch (ChatUsageException $e) {
+        // Fireworks already billed for whatever calls succeeded before this failure, even
+        // though the request as a whole didn't complete — surface usage/cost here too so the
+        // ledger doesn't silently miss it.
+        $costUsd = $pricing->costUsd($e->usage);
+        $ledger->recordChatUsage($e->usage, $costUsd, $model, false, $e->getMessage(), $userId);
+        return [
+            'error' => true,
+            'errorMessage' => 'Chat backend error: ' . $e->getMessage(),
+            'usage' => $e->usage,
+            'costUsd' => $costUsd,
+        ];
+    }
+
+    $costUsd = $pricing->costUsd($result['usage']);
+    $ledger->recordChatUsage($result['usage'], $costUsd, $model, true, null, $userId);
+
     return [
         'error' => false,
-        'timing' => $timing,
-        'hoursString' => CalculatorApi::makeHoursString($timing, $break3 === null ? null : (float) $break3),
+        'reply' => $result['reply'],
+        'messages' => $result['messages'],
+        'usage' => $result['usage'],
+        'costUsd' => $costUsd,
     ];
+});
+
+// Balance ledger
+$router->post('/api/v1/balance/deposits', function (array $p) {
+    if ($authError = requireChatApiKey()) {
+        return $authError;
+    }
+
+    $amountUsd = $p['amountUsd'] ?? null;
+    if (!is_numeric($amountUsd)) {
+        return ['error' => true, 'errorMessage' => "Parameter 'amountUsd' must be numeric."];
+    }
+    $note = isset($p['note']) ? (string) $p['note'] : null;
+
+    $ledger = Ledger::connect();
+    try {
+        $ledger->recordDeposit((float) $amountUsd, $note);
+        $balance = $ledger->getBalance();
+    } catch (\RuntimeException $e) {
+        return ['error' => true, 'errorMessage' => $e->getMessage()];
+    }
+
+    return ['error' => false, 'deposit' => ['amountUsd' => (float) $amountUsd, 'note' => $note], 'balance' => $balance];
+});
+
+$router->get('/api/v1/balance', function () {
+    if ($authError = requireChatApiKey()) {
+        return $authError;
+    }
+
+    $ledger = Ledger::connect();
+    try {
+        $balance = $ledger->getBalance();
+    } catch (\RuntimeException $e) {
+        return ['error' => true, 'errorMessage' => $e->getMessage()];
+    }
+
+    return ['error' => false, 'balance' => $balance];
+});
+
+$router->get('/api/v1/balance/usage-by-user', function () {
+    if ($authError = requireChatApiKey()) {
+        return $authError;
+    }
+
+    $ledger = Ledger::connect();
+    try {
+        $usageByUser = $ledger->usageByUser();
+    } catch (\RuntimeException $e) {
+        return ['error' => true, 'errorMessage' => $e->getMessage()];
+    }
+
+    return ['error' => false, 'usageByUser' => $usageByUser];
 });
 
 // --- dispatch ---

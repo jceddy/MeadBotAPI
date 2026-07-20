@@ -28,6 +28,8 @@ tags:
   - name: Sugar sources
   - name: Dates
   - name: Misc
+  - name: Chat
+  - name: Balance
 
 paths:
   /health:
@@ -1178,7 +1180,245 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
 
+  /chat:
+    post:
+      tags: [Chat]
+      summary: Chat with an LLM agent that has every calculation/lookup endpoint as a tool
+      description: >
+        Runs one turn of a tool-calling chat loop against Fireworks AI (an OpenAI-compatible
+        chat-completions API): sends `messages` plus tool definitions for every endpoint above
+        except `/health` and `/random`, executes whichever tools the model calls locally (no
+        HTTP round-trip — it calls the same code the corresponding REST route does), feeds the
+        results back to the model, and repeats until it replies with plain text. Requires the
+        `X-Api-Key` header. Pass the returned `messages` array back in as the next request's
+        `messages` (with a new user turn appended) to continue the conversation — this endpoint
+        is stateless and keeps no server-side session.
+      operationId: chat
+      security:
+        - ChatApiKey: []
+      parameters:
+        - name: X-User-Id
+          in: header
+          required: false
+          description: >
+            Optional caller-supplied identifier, recorded against this request's usage row for
+            per-user reporting (see GET /balance/usage-by-user). Opaque to this endpoint — not
+            validated against any user system, and never sent to Fireworks.
+          schema:
+            type: string
+          example: alice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messages]
+              properties:
+                messages:
+                  type: array
+                  description: >
+                    OpenAI-style conversation so far, e.g. starting with a system message and the
+                    user's latest message. Non-empty.
+                  items:
+                    type: object
+                    properties:
+                      role: { type: string, enum: [system, user, assistant, tool] }
+                      content: { type: string, nullable: true }
+              example:
+                messages:
+                  - role: user
+                    content: I have 5 gallons at 1.100 SG. What's my potential ABV?
+      responses:
+        '200':
+          description: Assistant reply, plus the full updated conversation and token usage/cost.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      reply:
+                        type: string
+                        description: The final assistant message's text content.
+                      messages:
+                        type: array
+                        description: >
+                          The input messages plus every assistant/tool turn generated this
+                          request — pass this back as the next request's `messages`.
+                        items:
+                          type: object
+                      usage:
+                        $ref: '#/components/schemas/ChatUsage'
+                      costUsd:
+                        type: number
+                        description: >
+                          Estimated USD cost of `usage`, from the FIREWORKS_PRICE_* rates
+                          configured on the server (defaults match gpt-oss-120b's published
+                          pricing). Not billing-authoritative — Fireworks' own usage dashboard is.
+        '400':
+          description: >
+            Missing/invalid request, missing/invalid `X-Api-Key`, chat not configured on this
+            server (no `FIREWORKS_API_KEY`/`CHAT_API_KEY`), or a Fireworks API/network failure.
+            `usage`/`costUsd` are included even here whenever at least one underlying Fireworks
+            call completed before the failure (e.g. a later tool-call round failed, or the
+            iteration cap was hit) — those calls were still billed by Fireworks.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - type: object
+                    properties:
+                      usage:
+                        $ref: '#/components/schemas/ChatUsage'
+                      costUsd:
+                        type: number
+
+  /balance:
+    get:
+      tags: [Balance]
+      summary: The running prepaid balance (total deposits minus total chat usage cost)
+      description: >
+        Always recomputed as SUM(deposits) - SUM(usage cost) from the database — never a stored,
+        cacheable figure — so it can't drift out of sync. Purely informational: /api/v1/chat never
+        checks this before running, so it can't be used to enforce a hard spending cap. Requires
+        the `X-Api-Key` header.
+      operationId: getBalance
+      security:
+        - ChatApiKey: []
+      responses:
+        '200':
+          description: Current balance.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      balance:
+                        $ref: '#/components/schemas/Balance'
+        '400':
+          description: >
+            Missing/invalid `X-Api-Key`, or the balance database isn't configured
+            (`MYSQL_DB_HOST`/`MYSQL_DB_DATABASE`/`MYSQL_DB_USERNAME`/`MYSQL_DB_PASSWORD`) or
+            reachable on this server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /balance/usage-by-user:
+    get:
+      tags: [Balance]
+      summary: Per-user chat usage totals, ordered by total cost descending
+      description: >
+        One row per distinct `X-User-Id` value seen on POST /chat requests (a `userId` of `null`
+        groups every request that omitted the header), including failed requests (which may have
+        zero usage/cost). Requires the `X-Api-Key` header.
+      operationId: getUsageByUser
+      security:
+        - ChatApiKey: []
+      responses:
+        '200':
+          description: Per-user usage totals.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      usageByUser:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            userId:
+                              type: string
+                              nullable: true
+                              description: The X-User-Id header value, or null for requests that omitted it.
+                            requestCount:
+                              type: integer
+                            totalUsageUsd:
+                              type: number
+                            totalTokens:
+                              type: integer
+                            lastUsedAt:
+                              type: string
+                              description: Timestamp of this user's most recent request.
+        '400':
+          description: >
+            Missing/invalid `X-Api-Key`, or the balance database isn't configured/reachable on
+            this server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /balance/deposits:
+    post:
+      tags: [Balance]
+      summary: Record a prepaid-balance deposit (e.g. after topping up the Fireworks account)
+      description: >
+        Inserts one row into the deposits ledger and returns the updated balance. `amountUsd` may
+        be negative for a manual correction (e.g. reconciling against Fireworks' own billing
+        dashboard) — there's no separate adjustments concept, just deposits that happen to be
+        negative. Requires the `X-Api-Key` header.
+      operationId: recordBalanceDeposit
+      security:
+        - ChatApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amountUsd]
+              properties:
+                amountUsd:
+                  type: number
+                  example: 50
+                note:
+                  type: string
+                  nullable: true
+                  example: Fireworks top-up 2026-07-19
+      responses:
+        '200':
+          description: Deposit recorded.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      deposit:
+                        type: object
+                        properties:
+                          amountUsd: { type: number }
+                          note: { type: string, nullable: true }
+                      balance:
+                        $ref: '#/components/schemas/Balance'
+        '400':
+          description: >
+            Missing/invalid `amountUsd`, missing/invalid `X-Api-Key`, or the balance database
+            isn't configured/reachable on this server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
 components:
+  securitySchemes:
+    ChatApiKey:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: Shared secret configured server-side as CHAT_API_KEY. Required only for POST /chat.
+
   parameters:
     UnitName:
       name: name
@@ -1207,6 +1447,36 @@ components:
           type: number
           description: Multiplier to convert an amount in this unit to the module's base unit.
           example: 3.7854117891
+
+    ChatUsage:
+      type: object
+      description: >
+        Total token usage across every Fireworks call the request made — a single /chat request
+        can trigger several (one per tool-calling round), so these are already summed.
+      properties:
+        prompt_tokens:
+          type: integer
+          description: Total input tokens (cached + uncached combined).
+        cached_prompt_tokens:
+          type: integer
+          description: The subset of prompt_tokens that hit Fireworks' prompt cache (billed at a lower rate).
+        completion_tokens:
+          type: integer
+        total_tokens:
+          type: integer
+
+    Balance:
+      type: object
+      properties:
+        totalDepositsUsd:
+          type: number
+          description: Sum of every recorded deposit (POST /balance/deposits).
+        totalUsageUsd:
+          type: number
+          description: Sum of every /chat request's costUsd.
+        balanceUsd:
+          type: number
+          description: totalDepositsUsd - totalUsageUsd.
 
     Error:
       type: object
