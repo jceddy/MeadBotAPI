@@ -241,20 +241,25 @@ curl -s -H 'X-Api-Key: <CHAT_API_KEY>' http://localhost:8000/api/v1/balance/usag
 
 ### Setup
 
-Requires four secrets, none needed by anything else here:
+Requires four secrets, plus one optional one, none needed by anything else here:
 
 - `MYSQL_DB_HOST`, `MYSQL_DB_DATABASE`, `MYSQL_DB_USERNAME`, `MYSQL_DB_PASSWORD` — credentials for
   a MySQL/MariaDB database this app can reach.
+- `MYSQL_DB_PORT` (optional) — only needed if the database isn't listening on MySQL's default
+  port (3306), e.g. a hosting provider that runs multiple instances on one box.
 
-Add all four as **GitHub Actions repository secrets** (same place as `FTP_HOST` etc.) —
-`deploy.yml` writes them into the same `.env` file as the chat secrets. If any is missing, `/chat`
-still works exactly as before (usage-logging silently no-ops rather than failing the request), but
-`/balance`, `/balance/deposits`, and `/balance/usage-by-user` respond with
-`{"error":true,"errorMessage":"The balance database is not configured on this server."}`.
+Add these as **GitHub Actions repository secrets** (same place as `FTP_HOST` etc.) — `deploy.yml`
+writes them into the same `.env` file as the chat secrets. If any of the four required ones is
+missing, `/chat` still works exactly as before (usage-logging silently no-ops rather than failing
+the request), but `/balance`, `/balance/deposits`, and `/balance/usage-by-user` respond with
+`{"error":true,"errorMessage":"The balance database is not configured on this server."}` — the
+same response you'll see if the port is wrong and the connection just fails, so a bad
+`MYSQL_DB_PORT` looks identical to a missing secret from the API's point of view.
 
 **Schema changes are never applied automatically** — neither this session nor GitHub Actions has
 network access to the database. Numbered SQL files under `migrations/` describe each schema
-change; apply them yourself, in order, against the database identified by the four secrets above:
+change; apply them yourself, in order, against the database identified by the secrets above (add
+`--port=<MYSQL_DB_PORT>` if you set one):
 
 ```
 mysql --host=<MYSQL_DB_HOST> --user=<MYSQL_DB_USERNAME> -p <MYSQL_DB_DATABASE> < migrations/0001_create_chat_usage.sql
@@ -262,8 +267,8 @@ mysql --host=<MYSQL_DB_HOST> --user=<MYSQL_DB_USERNAME> -p <MYSQL_DB_DATABASE> <
 mysql --host=<MYSQL_DB_HOST> --user=<MYSQL_DB_USERNAME> -p <MYSQL_DB_DATABASE> < migrations/0003_add_user_id_to_chat_usage.sql
 ```
 
-For local development, add the same four lines to your `.env` file (gitignored, not deployed by
-CI) pointing at a local or dev database you've applied the same migrations to.
+For local development, add the same lines to your `.env` file (gitignored, not deployed by CI)
+pointing at a local or dev database you've applied the same migrations to.
 
 ## Project structure
 
