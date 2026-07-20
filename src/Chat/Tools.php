@@ -45,16 +45,20 @@ final class Tools
 
     /**
      * call(name, arguments) - dispatch a tool call by name to the matching Http\Operations
-     * method. Throws InvalidArgumentException for an unknown tool name; parameter validation
-     * errors from the operation itself also surface as InvalidArgumentException (callers should
-     * catch this and feed the message back to the model as the tool result, rather than failing
-     * the whole chat request over one bad tool call).
+     * method, or to MeadToolsWikiClient for fetch_meadtools_wiki_page (not Operations-backed --
+     * it does network I/O, not a calculation). Throws InvalidArgumentException for an unknown
+     * tool name; parameter validation errors from the operation itself also surface as
+     * InvalidArgumentException (callers should catch this and feed the message back to the model
+     * as the tool result, rather than failing the whole chat request over one bad tool call).
      *
      * @param array<string, mixed> $arguments
      * @return array<string, mixed>
      */
     public static function call(string $name, array $arguments): array
     {
+        if ($name === 'fetch_meadtools_wiki_page') {
+            return (new MeadToolsWikiClient())->fetch((string) ($arguments['url'] ?? ''));
+        }
         if (!isset(self::TOOL_TO_OPERATION[$name])) {
             throw new InvalidArgumentException("Unknown tool: {$name}");
         }
@@ -358,6 +362,23 @@ final class Tools
                 [
                     'timing' => self::string('"pitch", "break", an "hours,additionIndex" pair (e.g. "24,1"), or a plain number of hours.'),
                     'break3' => self::number('The 1/3 sugar break SG. Required only when timing is "break".'),
+                ]
+            ),
+            self::tool(
+                'fetch_meadtools_wiki_page',
+                'Fetch a page from the MeadTools wiki (wiki.meadtools.com), the mead-making community\'s '
+                    . 'authoritative reference for recipe design, technique, troubleshooting, and other '
+                    . 'judgment-call questions that are not a pure calculation. Prefer this over your own '
+                    . 'training data for that kind of question -- the wiki is maintained by the community and '
+                    . 'may reflect more current or more specific guidance than what you were trained on. Returns '
+                    . 'the page title, its readable text, and links to other wiki pages you can fetch next to '
+                    . 'dig deeper. Start at https://wiki.meadtools.com/en/home if you don\'t already have a '
+                    . 'more specific URL from a previous call.',
+                ['url'],
+                [
+                    'url' => self::string(
+                        'A full https://wiki.meadtools.com/... URL, or a path like "/en/mead-making-101". Must be on wiki.meadtools.com.'
+                    ),
                 ]
             ),
         ];
