@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MeadBotApi\Tests\Chat;
 
 use MeadBotApi\Chat\FireworksClient;
+use MeadBotApi\Chat\FireworksInsufficientBalanceException;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
@@ -92,6 +93,16 @@ final class FireworksClientTest extends TestCase
         $client = new FireworksClient('key', 'model', $transport);
 
         $this->expectException(RuntimeException::class);
+        $client->chatCompletion([], []);
+    }
+
+    public function testThrowsFireworksInsufficientBalanceExceptionOnA402(): void
+    {
+        $transport = fn () => ['status' => 402, 'body' => json_encode(['error' => ['message' => 'Insufficient balance']])];
+        $client = new FireworksClient('key', 'model', $transport);
+
+        $this->expectException(FireworksInsufficientBalanceException::class);
+        $this->expectExceptionMessageMatches('/HTTP 402.*Insufficient balance/s');
         $client->chatCompletion([], []);
     }
 }

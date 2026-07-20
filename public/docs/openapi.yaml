@@ -1271,6 +1271,12 @@ paths:
                   - $ref: '#/components/schemas/Error'
                   - type: object
                     properties:
+                      insufficientBalance:
+                        type: boolean
+                        description: >
+                          True when the failure was Fireworks responding with HTTP 402 (the
+                          account's prepaid balance is exhausted) — see POST /balance/deposits to
+                          top it up. Absent/false for every other kind of failure.
                       usage:
                         $ref: '#/components/schemas/ChatUsage'
                       costUsd:
