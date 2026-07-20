@@ -164,4 +164,45 @@ final class MeadToolsWikiClientTest extends TestCase
 
         self::assertCount(40, $result['links']);
     }
+
+    public function testIndexReturnsTheBundledWikiPageIndex(): void
+    {
+        $result = MeadToolsWikiClient::index();
+
+        self::assertFalse($result['error']);
+        self::assertIsArray($result['pages']);
+        self::assertNotEmpty($result['pages']);
+
+        $homePage = $result['pages'][0];
+        self::assertSame('https://wiki.meadtools.com/en/home', $homePage['url']);
+        self::assertIsArray($homePage['keywords']);
+        self::assertContains('mead', $homePage['keywords']);
+
+        foreach ($result['pages'] as $page) {
+            self::assertStringStartsWith('https://wiki.meadtools.com/', $page['url']);
+        }
+    }
+
+    public function testIndexReturnsAnErrorWhenTheFileIsMissing(): void
+    {
+        $result = MeadToolsWikiClient::index(sys_get_temp_dir() . '/does-not-exist-' . uniqid() . '.json');
+
+        self::assertTrue($result['error']);
+        self::assertStringContainsString('unavailable', $result['errorMessage']);
+    }
+
+    public function testIndexReturnsAnErrorWhenTheFileIsMalformed(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'meadtools-index-');
+        file_put_contents($path, 'not json');
+
+        try {
+            $result = MeadToolsWikiClient::index($path);
+        } finally {
+            unlink($path);
+        }
+
+        self::assertTrue($result['error']);
+        self::assertStringContainsString('malformed', $result['errorMessage']);
+    }
 }

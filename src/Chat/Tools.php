@@ -45,9 +45,9 @@ final class Tools
 
     /**
      * call(name, arguments) - dispatch a tool call by name to the matching Http\Operations
-     * method, or to MeadToolsWikiClient for fetch_meadtools_wiki_page (not Operations-backed --
-     * it does network I/O, not a calculation). Throws InvalidArgumentException for an unknown
-     * tool name; parameter validation errors from the operation itself also surface as
+     * method, or to MeadToolsWikiClient for the two MeadTools wiki tools (not Operations-backed
+     * -- they do network/file I/O, not a calculation). Throws InvalidArgumentException for an
+     * unknown tool name; parameter validation errors from the operation itself also surface as
      * InvalidArgumentException (callers should catch this and feed the message back to the model
      * as the tool result, rather than failing the whole chat request over one bad tool call).
      *
@@ -56,6 +56,9 @@ final class Tools
      */
     public static function call(string $name, array $arguments): array
     {
+        if ($name === 'list_meadtools_wiki_pages') {
+            return MeadToolsWikiClient::index();
+        }
         if ($name === 'fetch_meadtools_wiki_page') {
             return (new MeadToolsWikiClient())->fetch((string) ($arguments['url'] ?? ''));
         }
@@ -365,6 +368,19 @@ final class Tools
                 ]
             ),
             self::tool(
+                'list_meadtools_wiki_pages',
+                'List every page in the MeadTools wiki (wiki.meadtools.com), the mead-making community\'s '
+                    . 'authoritative reference for recipe design, technique, troubleshooting, and other '
+                    . 'judgment-call questions that are not a pure calculation. Returns each page\'s title, url, '
+                    . 'and keywords -- call this FIRST for that kind of question, match the question against '
+                    . 'the titles/keywords to pick the most relevant page(s), then call '
+                    . 'fetch_meadtools_wiki_page with that page\'s url directly. This is much cheaper than '
+                    . 'crawling from the home page link by link, and should be your normal path in; only fetch '
+                    . 'the home page and follow links from there if nothing in this index looks relevant.',
+                [],
+                []
+            ),
+            self::tool(
                 'fetch_meadtools_wiki_page',
                 'Fetch a page from the MeadTools wiki (wiki.meadtools.com), the mead-making community\'s '
                     . 'authoritative reference for recipe design, technique, troubleshooting, and other '
@@ -372,8 +388,9 @@ final class Tools
                     . 'training data for that kind of question -- the wiki is maintained by the community and '
                     . 'may reflect more current or more specific guidance than what you were trained on. Returns '
                     . 'the page title, its readable text, and links to other wiki pages you can fetch next to '
-                    . 'dig deeper. Start at https://wiki.meadtools.com/en/home if you don\'t already have a '
-                    . 'more specific URL from a previous call.',
+                    . 'dig deeper. Call list_meadtools_wiki_pages first to find the right url directly, rather '
+                    . 'than starting from https://wiki.meadtools.com/en/home and following links, unless the '
+                    . 'index has nothing relevant.',
                 ['url'],
                 [
                     'url' => self::string(
