@@ -220,6 +220,22 @@ final class ChatAgentTest extends TestCase
             self::fail('expected ChatUsageException');
         } catch (ChatUsageException $e) {
             self::assertSame(self::EMPTY_USAGE, $e->usage);
+            self::assertFalse($e->insufficientBalance);
+        }
+    }
+
+    public function testFlagsInsufficientBalanceWhenFireworksRespondsWith402(): void
+    {
+        $agent = $this->agentWithCannedResponses([
+            ['status' => 402, 'body' => json_encode(['error' => ['message' => 'Insufficient balance']])],
+        ]);
+
+        try {
+            $agent->run([['role' => 'user', 'content' => 'hi']]);
+            self::fail('expected ChatUsageException');
+        } catch (ChatUsageException $e) {
+            self::assertTrue($e->insufficientBalance);
+            self::assertMatchesRegularExpression('/HTTP 402/', $e->getMessage());
         }
     }
 }

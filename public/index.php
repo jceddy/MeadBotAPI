@@ -128,6 +128,7 @@ $router->post('/api/v1/chat', function (array $p) {
         return [
             'error' => true,
             'errorMessage' => 'Chat backend error: ' . $e->getMessage(),
+            'insufficientBalance' => $e->insufficientBalance,
             'usage' => $e->usage,
             'costUsd' => $costUsd,
         ];

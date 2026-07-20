@@ -70,7 +70,8 @@ final class FireworksClient
 
         if ($response['status'] < 200 || $response['status'] >= 300 || !is_array($decoded)) {
             $message = is_array($decoded) ? self::errorMessage($decoded['error'] ?? null) : $response['body'];
-            throw new RuntimeException("Fireworks request failed (HTTP {$response['status']}): {$message}");
+            $exceptionClass = $response['status'] === 402 ? FireworksInsufficientBalanceException::class : RuntimeException::class;
+            throw new $exceptionClass("Fireworks request failed (HTTP {$response['status']}): {$message}");
         }
 
         if (isset($decoded['usage']) && is_array($decoded['usage'])) {

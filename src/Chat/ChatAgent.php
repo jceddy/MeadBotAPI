@@ -53,7 +53,12 @@ final class ChatAgent
             try {
                 $response = $this->client->chatCompletion($messages, $tools);
             } catch (RuntimeException $e) {
-                throw new ChatUsageException($e->getMessage(), $usage, $e);
+                throw new ChatUsageException(
+                    $e->getMessage(),
+                    $usage,
+                    insufficientBalance: $e instanceof FireworksInsufficientBalanceException,
+                    previous: $e
+                );
             }
 
             self::accumulate($usage, $response['usage'] ?? []);

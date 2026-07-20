@@ -19,8 +19,12 @@ final class ChatUsageException extends RuntimeException
     /**
      * @param array{prompt_tokens: int, cached_prompt_tokens: int, completion_tokens: int, total_tokens: int} $usage
      */
-    public function __construct(string $message, public readonly array $usage, ?Throwable $previous = null)
-    {
+    public function __construct(
+        string $message,
+        public readonly array $usage,
+        public readonly bool $insufficientBalance = false,
+        ?Throwable $previous = null
+    ) {
         parent::__construct($message, 0, $previous);
     }
 }
