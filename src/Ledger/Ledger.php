@@ -28,10 +28,15 @@ final class Ledger
         $this->pdo = $pdo;
     }
 
-    /** connect() - build a Ledger from the MYSQL_DB_* environment variables, or a disabled one (isConfigured() === false) if any are missing or the connection fails. */
+    /**
+     * connect() - build a Ledger from the MYSQL_DB_* environment variables, or a disabled one
+     * (isConfigured() === false) if any required one is missing or the connection fails.
+     * MYSQL_DB_PORT is optional -- omit it to use MySQL's default port (3306).
+     */
     public static function connect(): self
     {
         $host = getenv('MYSQL_DB_HOST');
+        $port = getenv('MYSQL_DB_PORT');
         $database = getenv('MYSQL_DB_DATABASE');
         $username = getenv('MYSQL_DB_USERNAME');
         $password = getenv('MYSQL_DB_PASSWORD');
@@ -40,13 +45,14 @@ final class Ledger
             return new self(null);
         }
 
+        $dsn = "mysql:host={$host}";
+        if ($port !== false && $port !== '') {
+            $dsn .= ";port={$port}";
+        }
+        $dsn .= ";dbname={$database};charset=utf8mb4";
+
         try {
-            $pdo = new PDO(
-                "mysql:host={$host};dbname={$database};charset=utf8mb4",
-                $username,
-                $password,
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-            );
+            $pdo = new PDO($dsn, $username, $password, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
         } catch (PDOException) {
             return new self(null);
         }

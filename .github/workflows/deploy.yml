@@ -58,6 +58,7 @@ jobs:
           FIREWORKS_API_KEY=${{ secrets.FIREWORKS_API_KEY }}
           CHAT_API_KEY=${{ secrets.CHAT_API_KEY }}
           MYSQL_DB_HOST=${{ secrets.MYSQL_DB_HOST }}
+          MYSQL_DB_PORT=${{ secrets.MYSQL_DB_PORT }}
           MYSQL_DB_DATABASE=${{ secrets.MYSQL_DB_DATABASE }}
           MYSQL_DB_USERNAME=${{ secrets.MYSQL_DB_USERNAME }}
           MYSQL_DB_PASSWORD=${{ secrets.MYSQL_DB_PASSWORD }}
