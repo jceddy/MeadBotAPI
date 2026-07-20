@@ -17,6 +17,11 @@ final class ToolsTest extends TestCase
         $definitions = Tools::definitions();
         self::assertNotEmpty($definitions);
 
+        // fetch_meadtools_wiki_page isn't Operations-backed -- it does network I/O, not a
+        // calculation -- so it's dispatched specially in Tools::call() rather than through
+        // TOOL_TO_OPERATION.
+        $nonOperationTools = ['fetch_meadtools_wiki_page'];
+
         $names = [];
         foreach ($definitions as $definition) {
             self::assertSame('function', $definition['type']);
@@ -28,12 +33,15 @@ final class ToolsTest extends TestCase
             self::assertSame('object', $function['parameters']['type']);
             $names[] = $function['name'];
 
-            // Every declared tool must actually be dispatchable.
+            if (in_array($function['name'], $nonOperationTools, true)) {
+                continue;
+            }
+            // Every other declared tool must actually be dispatchable.
             self::assertTrue(method_exists(Operations::class, self::operationFor($function['name'])));
         }
 
         self::assertSame($names, array_unique($names), 'tool names must be unique');
-        self::assertCount(22, $definitions, 'expected one tool per Operations method except health/random');
+        self::assertCount(23, $definitions, 'expected one tool per Operations method (except health/random), plus fetch_meadtools_wiki_page');
     }
 
     private static function operationFor(string $toolName): string
@@ -83,5 +91,15 @@ final class ToolsTest extends TestCase
         // calculate_calories requires percentAlcohol/fg/bottleVolume/servingVolume.
         $this->expectException(InvalidArgumentException::class);
         Tools::call('calculate_calories', []);
+    }
+
+    public function testCallDispatchesFetchMeadtoolsWikiPageAndRejectsDisallowedHostsWithoutAnyNetworkCall(): void
+    {
+        // Host validation happens before the transport is ever invoked (see
+        // MeadToolsWikiClientTest for the transport-injected success/failure paths), so this
+        // exercises Tools::call()'s wiring without making a real HTTP request.
+        $result = Tools::call('fetch_meadtools_wiki_page', ['url' => 'https://evil.example.com/']);
+        self::assertTrue($result['error']);
+        self::assertStringContainsString('wiki.meadtools.com', $result['errorMessage']);
     }
 }
