@@ -217,7 +217,7 @@
       "level": 1,
       "category": ["Process", "Preparation"],
       "summary": "A dense, all-in-one walkthrough of a brew day and fermentation, using Meadcalc/BatchBuildr, YAN calculations, and staggered nutrients, plus a terminology table (ABV, OG, FG, YAN, SNA).",
-      "keywords": ["process overview", "ABV", "OG", "FG", "YAN", "SNA", "Meadcalc", "BatchBuildr", "brew day", "nutrition schedule", "step feeding", "acid tannin balance", "stabilization"],
+      "keywords": ["process overview", "ABV", "OG", "FG", "YAN", "SNA", "Meadcalc", "BatchBuildr", "brew day", "nutrition schedule", "step feeding", "acid tannin balance", "stabilization", "rack"],
       "related_pages": ["https://wiki.meadtools.com/en/process/nutrient_schedules", "https://wiki.meadtools.com/en/process/fermentation", "https://wiki.meadtools.com/en/process/stabilization"]
     },
     {
@@ -352,7 +352,7 @@
       "level": 1,
       "category": ["Process", "Post-Fermentation"],
       "summary": "Covers bulk and bottle aging, headspace/oxidation management, and cork selection and quality for long-term storage.",
-      "keywords": ["aging", "bulk aging", "bottle aging", "headspace", "oxidation", "corks", "sulfites", "oak", "clarity"],
+      "keywords": ["aging", "bulk aging", "bottle aging", "headspace", "oxidation", "corks", "sulfites", "oak", "clarity", "rack"],
       "related_pages": ["https://wiki.meadtools.com/en/process/fining", "https://wiki.meadtools.com/en/process/packaging", "https://wiki.meadtools.com/en/faq/headspace"]
     },
     {
