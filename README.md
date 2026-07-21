@@ -141,13 +141,15 @@ design, technique, troubleshooting — as opposed to pure calculations) in
 [wiki.meadtools.com](https://wiki.meadtools.com/en/home) instead of the model's training data,
 which was observed giving bad advice on its own:
 
-- `list_meadtools_wiki_pages` returns a hand-maintained index (title/url/keywords) of pages on
-  that wiki, from `src/Chat/data/meadtools_wiki_index.json`, so the model can pick a relevant
-  page directly instead of crawling link-by-link from the home page (which reliably burned
-  through the tool-call iteration cap without finding the right page). The index is static and
-  updated by hand on no fixed schedule — regenerate it (title/url/keywords per page) and replace
-  that file whenever the wiki's content changes enough to matter; nothing here does that
-  automatically.
+- `list_meadtools_wiki_pages` returns a hand-maintained index of pages on that wiki, from
+  `src/Chat/data/meadtools_wiki_index.json` — title, url, level (0 = home, 1 = linked from home,
+  2 = linked from a level-1 page), category tags, a one-sentence summary, keywords, and
+  related_pages (other page urls on the same topic, so the model doesn't have to discover them by
+  reading the page first) — so the model can pick a relevant page directly instead of crawling
+  link-by-link from the home page (which reliably burned through the tool-call iteration cap
+  without finding the right page). The index is static and updated by hand on no fixed schedule
+  — regenerate it in the same shape and replace that file whenever the wiki's content changes
+  enough to matter; nothing here does that automatically.
 - `fetch_meadtools_wiki_page` fetches a given page from that same host — restricted to
   `wiki.meadtools.com` specifically, both on the requested URL and wherever it ends up after any
   redirect, since an LLM-directed "fetch any URL" tool would otherwise be an SSRF risk — and
