@@ -177,6 +177,7 @@ final class ChatAgentTest extends TestCase
             self::fail('expected ChatUsageException');
         } catch (ChatUsageException $e) {
             self::assertMatchesRegularExpression('/maximum tool-calling iterations/', $e->getMessage());
+            self::assertTrue($e->exceededToolIterations);
             // 6 iterations of the same 10-prompt/2-completion response.
             self::assertSame(60, $e->usage['prompt_tokens']);
             self::assertSame(12, $e->usage['completion_tokens']);
@@ -221,6 +222,7 @@ final class ChatAgentTest extends TestCase
         } catch (ChatUsageException $e) {
             self::assertSame(self::EMPTY_USAGE, $e->usage);
             self::assertFalse($e->insufficientBalance);
+            self::assertFalse($e->exceededToolIterations);
         }
     }
 

@@ -23,6 +23,7 @@ final class ChatUsageException extends RuntimeException
         string $message,
         public readonly array $usage,
         public readonly bool $insufficientBalance = false,
+        public readonly bool $exceededToolIterations = false,
         ?Throwable $previous = null
     ) {
         parent::__construct($message, 0, $previous);

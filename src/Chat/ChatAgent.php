@@ -80,7 +80,11 @@ final class ChatAgent
             }
         }
 
-        throw new ChatUsageException('Exceeded maximum tool-calling iterations (' . self::MAX_TOOL_ITERATIONS . ').', $usage);
+        throw new ChatUsageException(
+            'Exceeded maximum tool-calling iterations (' . self::MAX_TOOL_ITERATIONS . ').',
+            $usage,
+            exceededToolIterations: true
+        );
     }
 
     /** @return array{prompt_tokens: int, cached_prompt_tokens: int, completion_tokens: int, total_tokens: int} */
