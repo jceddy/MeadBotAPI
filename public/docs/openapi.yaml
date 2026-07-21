@@ -1282,6 +1282,12 @@ paths:
                           True when the failure was Fireworks responding with HTTP 402 (the
                           account's prepaid balance is exhausted) — see POST /balance/deposits to
                           top it up. Absent/false for every other kind of failure.
+                      exceededToolIterations:
+                        type: boolean
+                        description: >
+                          True when the failure was the chat agent hitting its tool-calling
+                          iteration cap without producing a final reply. Absent/false for every
+                          other kind of failure.
                       usage:
                         $ref: '#/components/schemas/ChatUsage'
                       costUsd:
