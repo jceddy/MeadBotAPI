@@ -8,6 +8,7 @@ use MeadBotApi\Chat\ChatAgent;
 use MeadBotApi\Chat\ChatUsageException;
 use MeadBotApi\Chat\CostCalculator;
 use MeadBotApi\Chat\FireworksClient;
+use MeadBotApi\Feedback\ChatFeedbackStore;
 use MeadBotApi\Http\Env;
 use MeadBotApi\Http\Operations;
 use MeadBotApi\Http\Router;
@@ -15,7 +16,7 @@ use MeadBotApi\Ledger\Ledger;
 
 Env::load(dirname(__DIR__) . '/.env');
 
-/** Shared by /chat and /balance/*: checks X-Api-Key against CHAT_API_KEY. Returns an error array to short-circuit the route, or null when authorized. */
+/** Shared by /chat, /chat/feedback, and /balance/*: checks X-Api-Key against CHAT_API_KEY. Returns an error array to short-circuit the route, or null when authorized. */
 function requireChatApiKey(): ?array
 {
     $apiKey = getenv('CHAT_API_KEY');
@@ -144,6 +145,36 @@ $router->post('/api/v1/chat', function (array $p) {
         'usage' => $result['usage'],
         'costUsd' => $costUsd,
     ];
+});
+
+// Negative feedback on a !chat reply (a Discord 👎 reaction), recorded by MeadBot's
+// messageReactionAdd handler once it's confirmed the reacted-to message really was a chat reply.
+$router->post('/api/v1/chat/feedback', function (array $p) {
+    if ($authError = requireChatApiKey()) {
+        return $authError;
+    }
+
+    $discordUserId = isset($p['discordUserId']) ? trim((string) $p['discordUserId']) : '';
+    $discordMessageId = isset($p['discordMessageId']) ? trim((string) $p['discordMessageId']) : '';
+    if ($discordUserId === '' || $discordMessageId === '') {
+        return ['error' => true, 'errorMessage' => "Parameters 'discordUserId' and 'discordMessageId' are required."];
+    }
+
+    $discordChannelId = !empty($p['discordChannelId']) ? (string) $p['discordChannelId'] : null;
+    $discordGuildId = !empty($p['discordGuildId']) ? (string) $p['discordGuildId'] : null;
+
+    $messages = $p['messages'] ?? null;
+    if (!is_array($messages) || $messages === []) {
+        return ['error' => true, 'errorMessage' => 'messages must be a non-empty array of {role, content} objects.'];
+    }
+
+    try {
+        ChatFeedbackStore::connect()->record($discordUserId, $discordMessageId, $discordChannelId, $discordGuildId, $messages);
+    } catch (\RuntimeException $e) {
+        return ['error' => true, 'errorMessage' => $e->getMessage()];
+    }
+
+    return ['error' => false];
 });
 
 // Balance ledger

@@ -97,6 +97,7 @@ route called with the wrong HTTP method, and `200` otherwise.
 | GET | `/api/v1/random` | `max` | `RandomInteger` |
 | POST | `/api/v1/hours-string` | `timing`, `break3` (required only when `timing` is `"break"`) | `MakeHoursString` |
 | POST | `/api/v1/chat` | `messages` (OpenAI-style conversation). Requires header `X-Api-Key`. | — (see [Chat agent](#chat-agent)) |
+| POST | `/api/v1/chat/feedback` | `discordUserId`, `discordMessageId`, `messages`, `discordChannelId`/`discordGuildId` (optional). Requires header `X-Api-Key`. | — (see [Chat agent](#chat-agent)) |
 | GET | `/api/v1/balance` | — . Requires header `X-Api-Key`. | — (see [Balance ledger](#balance-ledger)) |
 | POST | `/api/v1/balance/deposits` | `amountUsd`, `note` (optional). Requires header `X-Api-Key`. | — (see [Balance ledger](#balance-ledger)) |
 | GET | `/api/v1/balance/usage-by-user` | — . Requires header `X-Api-Key`. | — (see [Per-user usage](#per-user-usage)) |
@@ -176,6 +177,28 @@ billing-authoritative figure (Fireworks' own dashboard is). Both fields are incl
 `400` error response whenever at least one underlying call completed before the failure (e.g. a
 later tool-call round failed, or the agent hit its iteration cap) — those calls were still billed
 by Fireworks regardless of whether the request as a whole succeeded.
+
+### Negative feedback
+
+`POST /api/v1/chat/feedback` records a Discord 👎 reaction on one of MeadBot's `!chat`/`!ask`
+replies — one row per reaction, storing the reconstructed conversation (ending with the disliked
+reply) as JSON, plus the reacting user's Discord ID and the message/channel/guild IDs needed to
+find it again. MeadBot's `messageReactionAdd` handler calls this once it's confirmed the
+reacted-to message really was a chat reply; it's not a chat-agent tool and the model never calls
+it itself.
+
+```
+curl -s -X POST http://localhost:8000/api/v1/chat/feedback \
+  -H 'Content-Type: application/json' \
+  -H 'X-Api-Key: <CHAT_API_KEY>' \
+  -d '{"discordUserId": "123", "discordMessageId": "456", "discordGuildId": "789", "messages": [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]}'
+# {"error":false}
+```
+
+This shares the same `MYSQL_DB_*` configuration as the balance ledger below (see its
+[Setup](#setup-1) for the required secrets and how to apply migrations) — no additional secrets
+are needed. If the database isn't configured/reachable, this responds with
+`{"error":true,"errorMessage":"The feedback database is not configured on this server."}`.
 
 ### Setup
 
@@ -284,6 +307,7 @@ change; apply them yourself, in order, against the database identified by the se
 mysql --host=<MYSQL_DB_HOST> --user=<MYSQL_DB_USERNAME> -p <MYSQL_DB_DATABASE> < migrations/0001_create_chat_usage.sql
 mysql --host=<MYSQL_DB_HOST> --user=<MYSQL_DB_USERNAME> -p <MYSQL_DB_DATABASE> < migrations/0002_create_balance_deposits.sql
 mysql --host=<MYSQL_DB_HOST> --user=<MYSQL_DB_USERNAME> -p <MYSQL_DB_DATABASE> < migrations/0003_add_user_id_to_chat_usage.sql
+mysql --host=<MYSQL_DB_HOST> --user=<MYSQL_DB_USERNAME> -p <MYSQL_DB_DATABASE> < migrations/0004_create_chat_feedback.sql
 ```
 
 For local development, add the same lines to your `.env` file (gitignored, not deployed by CI)
