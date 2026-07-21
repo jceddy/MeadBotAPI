@@ -372,11 +372,15 @@ final class Tools
                 'List every page in the MeadTools wiki (wiki.meadtools.com), the mead-making community\'s '
                     . 'authoritative reference for recipe design, technique, troubleshooting, and other '
                     . 'judgment-call questions that are not a pure calculation. Returns each page\'s title, url, '
-                    . 'and keywords -- call this FIRST for that kind of question, match the question against '
-                    . 'the titles/keywords to pick the most relevant page(s), then call '
-                    . 'fetch_meadtools_wiki_page with that page\'s url directly. This is much cheaper than '
-                    . 'crawling from the home page link by link, and should be your normal path in; only fetch '
-                    . 'the home page and follow links from there if nothing in this index looks relevant.',
+                    . 'level (0 = home, 1 = linked from home, 2 = linked from a level-1 page), category tags, a '
+                    . 'one-sentence summary, keywords, and related_pages (other page urls likely relevant to the '
+                    . 'same topic -- often worth fetching alongside your main match, without waiting to discover '
+                    . 'them by reading the page first). Call this FIRST for that kind of question. Use summary as '
+                    . 'the primary signal for relevance (it says what a page actually covers, unlike keywords '
+                    . 'alone), category/keywords to narrow among close matches, then call fetch_meadtools_wiki_page '
+                    . 'with the matching url(s) directly. This is much cheaper than crawling from the home page '
+                    . 'link by link, and should be your normal path in; only fetch the home page and follow links '
+                    . 'from there if nothing in this index looks relevant.',
                 [],
                 []
             ),
@@ -388,9 +392,10 @@ final class Tools
                     . 'training data for that kind of question -- the wiki is maintained by the community and '
                     . 'may reflect more current or more specific guidance than what you were trained on. Returns '
                     . 'the page title, its readable text, and links to other wiki pages you can fetch next to '
-                    . 'dig deeper. Call list_meadtools_wiki_pages first to find the right url directly, rather '
-                    . 'than starting from https://wiki.meadtools.com/en/home and following links, unless the '
-                    . 'index has nothing relevant.',
+                    . 'dig deeper. Call list_meadtools_wiki_pages first to find the right url (and any '
+                    . 'related_pages worth also fetching) directly, rather than starting from '
+                    . 'https://wiki.meadtools.com/en/home and following links, unless the index has nothing '
+                    . 'relevant.',
                 ['url'],
                 [
                     'url' => self::string(
