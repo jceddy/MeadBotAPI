@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MeadBotApi\Ledger;
 
+use MeadBotApi\Http\Database;
 use PDO;
 use PDOException;
 use RuntimeException;
@@ -31,33 +32,10 @@ final class Ledger
     /**
      * connect() - build a Ledger from the MYSQL_DB_* environment variables, or a disabled one
      * (isConfigured() === false) if any required one is missing or the connection fails.
-     * MYSQL_DB_PORT is optional -- omit it to use MySQL's default port (3306).
      */
     public static function connect(): self
     {
-        $host = getenv('MYSQL_DB_HOST');
-        $port = getenv('MYSQL_DB_PORT');
-        $database = getenv('MYSQL_DB_DATABASE');
-        $username = getenv('MYSQL_DB_USERNAME');
-        $password = getenv('MYSQL_DB_PASSWORD');
-
-        if ($host === false || $host === '' || $database === false || $username === false || $password === false) {
-            return new self(null);
-        }
-
-        $dsn = "mysql:host={$host}";
-        if ($port !== false && $port !== '') {
-            $dsn .= ";port={$port}";
-        }
-        $dsn .= ";dbname={$database};charset=utf8mb4";
-
-        try {
-            $pdo = new PDO($dsn, $username, $password, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-        } catch (PDOException) {
-            return new self(null);
-        }
-
-        return new self($pdo);
+        return new self(Database::connect());
     }
 
     public function isConfigured(): bool

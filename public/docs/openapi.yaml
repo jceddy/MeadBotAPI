@@ -1287,6 +1287,69 @@ paths:
                       costUsd:
                         type: number
 
+  /chat/feedback:
+    post:
+      tags: [Chat]
+      summary: Record negative feedback on a !chat reply (a Discord 👎 reaction)
+      description: >
+        Inserts one row into the chat feedback table. Intended to be called by MeadBot's
+        messageReactionAdd handler once it's confirmed the reacted-to message really was a
+        `!chat`/`!ask` reply, passing the reconstructed conversation ending with the disliked
+        assistant reply. Requires the `X-Api-Key` header. Purely a feedback log — this endpoint
+        doesn't affect `/chat`'s behavior in any way.
+      operationId: recordChatFeedback
+      security:
+        - ChatApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [discordUserId, discordMessageId, messages]
+              properties:
+                discordUserId:
+                  type: string
+                  description: Snowflake ID of the Discord user who reacted 👎.
+                  example: '123456789012345678'
+                discordMessageId:
+                  type: string
+                  description: Snowflake ID of MeadBot's message that got the reaction.
+                  example: '234567890123456789'
+                discordChannelId:
+                  type: string
+                  nullable: true
+                  example: '345678901234567890'
+                discordGuildId:
+                  type: string
+                  nullable: true
+                  description: Omitted/null for a reaction in a DM channel.
+                  example: '456789012345678901'
+                messages:
+                  type: array
+                  description: >
+                    OpenAI-style conversation ending with the disliked assistant reply. Non-empty.
+                  items:
+                    type: object
+                    properties:
+                      role: { type: string, enum: [system, user, assistant, tool] }
+                      content: { type: string, nullable: true }
+      responses:
+        '200':
+          description: Feedback recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessFlag'
+        '400':
+          description: >
+            Missing `discordUserId`/`discordMessageId`/`messages`, missing/invalid `X-Api-Key`,
+            or the feedback database isn't configured/reachable on this server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /balance:
     get:
       tags: [Balance]
