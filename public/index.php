@@ -6,8 +6,8 @@ require dirname(__DIR__) . '/vendor/autoload.php';
 
 use MeadBotApi\Chat\ChatAgent;
 use MeadBotApi\Chat\ChatUsageException;
-use MeadBotApi\Chat\CostCalculator;
 use MeadBotApi\Chat\FireworksClient;
+use MeadBotApi\Chat\ModelCatalog;
 use MeadBotApi\Feedback\ChatFeedbackStore;
 use MeadBotApi\Http\Env;
 use MeadBotApi\Http\Operations;
@@ -28,19 +28,6 @@ function requireChatApiKey(): ?array
         return ['error' => true, 'errorMessage' => 'Missing or invalid X-Api-Key header.'];
     }
     return null;
-}
-
-/**
- * gpt-oss-120b's published per-1M-token pricing by default; override via .env if FIREWORKS_MODEL
- * is ever changed to a model with different rates.
- */
-function fireworksPricing(): CostCalculator
-{
-    return new CostCalculator(
-        (float) (getenv('FIREWORKS_PRICE_INPUT_PER_1M') ?: 0.15),
-        (float) (getenv('FIREWORKS_PRICE_CACHED_INPUT_PER_1M') ?: 0.01),
-        (float) (getenv('FIREWORKS_PRICE_OUTPUT_PER_1M') ?: 0.60)
-    );
 }
 
 $router = new Router();
@@ -106,6 +93,11 @@ $router->post('/api/v1/chat', function (array $p) {
         return ['error' => true, 'errorMessage' => 'messages must be a non-empty array of {role, content} objects.'];
     }
 
+    $modelKey = $p['model'] ?? ModelCatalog::DEFAULT_KEY;
+    if (!is_string($modelKey) || !ModelCatalog::has($modelKey)) {
+        return ['error' => true, 'errorMessage' => 'model must be one of: ' . implode(', ', ModelCatalog::keys()) . '.'];
+    }
+
     // Optional caller-supplied identifier, purely for usage tracking (see
     // GET /api/v1/balance/usage-by-user) — opaque to this endpoint, not sent to Fireworks.
     $userId = $_SERVER['HTTP_X_USER_ID'] ?? null;
@@ -113,9 +105,9 @@ $router->post('/api/v1/chat', function (array $p) {
         $userId = null;
     }
 
-    $model = getenv('FIREWORKS_MODEL') ?: 'accounts/fireworks/models/gpt-oss-120b';
+    $model = ModelCatalog::fireworksModel($modelKey);
     $agent = new ChatAgent(new FireworksClient($fireworksKey, $model));
-    $pricing = fireworksPricing();
+    $pricing = ModelCatalog::pricing($modelKey);
     $ledger = Ledger::connect();
 
     try {
