@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MeadBotApi\Chat;
 
 use InvalidArgumentException;
+use MeadBotApi\Calculator\Constants;
 use MeadBotApi\Http\Operations;
 
 /**
@@ -118,7 +119,7 @@ final class Tools
                 'get_volume_unit',
                 'Look up a volume unit identifier by name.',
                 ['name'],
-                ['name' => self::string('Volume unit name, e.g. gallon, liters, quart.')]
+                ['name' => self::enumString(array_values(Constants::VOLUME_UNIT_SLUGS), 'Volume unit name.')]
             ),
             self::tool(
                 'convert_volume',
@@ -126,15 +127,15 @@ final class Tools
                 ['amount', 'fromUnit', 'toUnit'],
                 [
                     'amount' => self::number('Amount to convert.'),
-                    'fromUnit' => self::string('Unit name to convert from, e.g. gallon.'),
-                    'toUnit' => self::string('Unit name to convert to, e.g. liters.'),
+                    'fromUnit' => self::enumString(array_values(Constants::VOLUME_UNIT_SLUGS), 'Unit to convert from.'),
+                    'toUnit' => self::enumString(array_values(Constants::VOLUME_UNIT_SLUGS), 'Unit to convert to.'),
                 ]
             ),
             self::tool(
                 'get_honey_unit',
                 'Look up a honey unit identifier by name.',
                 ['name'],
-                ['name' => self::string('Honey unit name, e.g. kg, lbs, cups.')]
+                ['name' => self::enumString(array_values(Constants::HONEY_UNIT_SLUGS), 'Honey unit name.')]
             ),
             self::tool(
                 'convert_honey_units',
@@ -142,8 +143,8 @@ final class Tools
                 ['amount', 'fromUnit', 'toUnit'],
                 [
                     'amount' => self::number('Amount to convert.'),
-                    'fromUnit' => self::string('Unit name to convert from, e.g. kg.'),
-                    'toUnit' => self::string('Unit name to convert to, e.g. lbs.'),
+                    'fromUnit' => self::enumString(array_values(Constants::HONEY_UNIT_SLUGS), 'Unit to convert from.'),
+                    'toUnit' => self::enumString(array_values(Constants::HONEY_UNIT_SLUGS), 'Unit to convert to.'),
                 ]
             ),
             self::tool(
@@ -152,7 +153,10 @@ final class Tools
                 ['fromTemperature', 'fromUnit'],
                 [
                     'fromTemperature' => self::number('Temperature value to convert.'),
-                    'fromUnit' => self::enumString(['c', 'celcius', 'f', 'fahrenheit'], 'The unit fromTemperature is expressed in.'),
+                    'fromUnit' => self::enumString(
+                        ['c', 'celsius', 'celcius', 'f', 'fahrenheit'],
+                        'The unit fromTemperature is expressed in.'
+                    ),
                 ]
             ),
             self::tool(
@@ -185,16 +189,18 @@ final class Tools
             self::tool(
                 'calculate_blend',
                 'Given any four (or five) of {value1, value2, blendedValue, volume1, volume2, totalVolume}, solve '
-                    . 'for fieldToCalculate.',
+                    . 'for fieldToCalculate. value1 must be <= value2, and blendedValue (if given) must fall '
+                    . 'between value1 and value2 -- swap which liquid is "1" vs "2" if that\'s not naturally the '
+                    . 'case for the two values you have.',
                 ['fieldToCalculate'],
                 [
                     'fieldToCalculate' => self::enumString(
                         ['value1', 'value2', 'blended_value', 'volume1', 'volume2', 'total_volume'],
                         'Which field to solve for.'
                     ),
-                    'value1' => self::number("The first liquid's value (gravity/ABV/etc)."),
-                    'value2' => self::number("The second liquid's value."),
-                    'blendedValue' => self::number('The value after blending.'),
+                    'value1' => self::number("The first liquid's value (gravity/ABV/etc). Must be <= value2."),
+                    'value2' => self::number("The second liquid's value. Must be >= value1."),
+                    'blendedValue' => self::number('The value after blending. Must be between value1 and value2.'),
                     'volume1' => self::number('Volume of the liquid with value1.'),
                     'volume2' => self::number('Volume of the liquid with value2.'),
                     'totalVolume' => self::number('volume1 + volume2.'),
@@ -217,9 +223,17 @@ final class Tools
                     'yanRatioDap' => self::number('Used only when enforceLimits is false. Defaults to 35.'),
                     'yanRatioFermK' => self::number('Used only when enforceLimits is false. Defaults to 25.'),
                     'yanRatioFermO' => self::number('Used only when enforceLimits is false. Defaults to 40.'),
-                    'fermKYan' => self::number('ppm YAN provided by the Fermaid K product in use. Defaults to 134.'),
+                    'fermKYan' => self::number(
+                        'ppm YAN provided by the Fermaid K product in use. Defaults to 134 -- note most other '
+                            . 'calculators/product labels assume 100, so only override this if the user says '
+                            . 'otherwise.'
+                    ),
                     'fillFkFirst' => self::boolean('Defaults to true.'),
-                    'gofermYan' => self::number('ppm YAN provided by the Go-Ferm product in use. Defaults to 77.'),
+                    'gofermYan' => self::number(
+                        'ppm YAN provided by the Go-Ferm product in use. Defaults to 77 -- note most other '
+                            . 'calculators/product labels assume 0 (i.e. ignore Go-Ferm\'s YAN contribution '
+                            . 'entirely), so only override this if the user says otherwise.'
+                    ),
                     'gofermGrams' => self::number('Grams of Go-Ferm already used for rehydration. Defaults to 0.'),
                 ]
             ),
@@ -251,8 +265,16 @@ final class Tools
                     'yanRatioDap' => self::number('Defaults to 35. Only meaningful for the advanced regimen.'),
                     'yanRatioFermK' => self::number('Defaults to 25. Only meaningful for the advanced regimen.'),
                     'yanRatioFermO' => self::number('Defaults to 40. Only meaningful for the advanced regimen.'),
-                    'fermKYan' => self::number('ppm YAN provided by the Fermaid K product in use. Defaults to 134.'),
-                    'gofermYan' => self::number('ppm YAN provided by the Go-Ferm product in use. Defaults to 77.'),
+                    'fermKYan' => self::number(
+                        'ppm YAN provided by the Fermaid K product in use. Defaults to 134 -- note most other '
+                            . 'calculators/product labels assume 100, so only override this if the user says '
+                            . 'otherwise.'
+                    ),
+                    'gofermYan' => self::number(
+                        'ppm YAN provided by the Go-Ferm product in use. Defaults to 77 -- note most other '
+                            . 'calculators/product labels assume 0 (i.e. ignore Go-Ferm\'s YAN contribution '
+                            . 'entirely), so only override this if the user says otherwise.'
+                    ),
                     'fillFkFirst' => self::boolean('Defaults to true. Only meaningful for the advanced regimen.'),
                     'hot' => self::boolean('Whether fermenting hot. Affects the default SNA schedule. Defaults to false.'),
                     'snaScheduleOverride' => [
@@ -319,8 +341,16 @@ final class Tools
                     'yanRatioDap' => self::number('Defaults to 35.'),
                     'yanRatioFermK' => self::number('Defaults to 25.'),
                     'yanRatioFermO' => self::number('Defaults to 40.'),
-                    'fermKYan' => self::number('ppm YAN provided by the Fermaid K product in use. Defaults to 134.'),
-                    'gofermYan' => self::number('ppm YAN provided by the Go-Ferm product in use. Defaults to 77.'),
+                    'fermKYan' => self::number(
+                        'ppm YAN provided by the Fermaid K product in use. Defaults to 134 -- note most other '
+                            . 'calculators/product labels assume 100, so only override this if the user says '
+                            . 'otherwise.'
+                    ),
+                    'gofermYan' => self::number(
+                        'ppm YAN provided by the Go-Ferm product in use. Defaults to 77 -- note most other '
+                            . 'calculators/product labels assume 0 (i.e. ignore Go-Ferm\'s YAN contribution '
+                            . 'entirely), so only override this if the user says otherwise.'
+                    ),
                     'fillFkFirst' => self::boolean('Defaults to true.'),
                     'useGoferm' => self::boolean('Defaults to true.'),
                     'yeastPackGrams' => self::number('Defaults to 5.'),

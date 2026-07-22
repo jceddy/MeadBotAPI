@@ -6,6 +6,7 @@ namespace MeadBotApi\Tests\Chat;
 
 use InvalidArgumentException;
 use MeadBotApi\Calculator\CalculatorApi;
+use MeadBotApi\Calculator\Constants;
 use MeadBotApi\Chat\Tools;
 use MeadBotApi\Http\Operations;
 use PHPUnit\Framework\TestCase;
@@ -111,5 +112,46 @@ final class ToolsTest extends TestCase
         self::assertIsArray($result['pages']);
         self::assertNotEmpty($result['pages']);
         self::assertSame('https://wiki.meadtools.com/en/home', $result['pages'][0]['url']);
+    }
+
+    /**
+     * convert_volume/get_volume_unit and convert_honey_units/get_honey_unit take free-text unit
+     * names in the underlying Operations methods (which also accept many aliases per unit), but
+     * their tool schemas constrain the model to the canonical slugs so it doesn't have to guess
+     * or burn an extra lookup call -- these assert that constraint stays in sync with the actual
+     * canonical slug lists rather than drifting from them.
+     */
+    public function testVolumeAndHoneyUnitToolsEnumerateTheCanonicalSlugs(): void
+    {
+        $byName = [];
+        foreach (Tools::definitions() as $definition) {
+            // properties is cast to an object in Tools::tool() to serialize as a JSON object even
+            // when empty; cast back to an array here for normal PHP array access.
+            $byName[$definition['function']['name']] = (array) $definition['function']['parameters']['properties'];
+        }
+
+        $volumeSlugs = array_values(Constants::VOLUME_UNIT_SLUGS);
+        self::assertSame($volumeSlugs, $byName['get_volume_unit']['name']['enum']);
+        self::assertSame($volumeSlugs, $byName['convert_volume']['fromUnit']['enum']);
+        self::assertSame($volumeSlugs, $byName['convert_volume']['toUnit']['enum']);
+
+        $honeySlugs = array_values(Constants::HONEY_UNIT_SLUGS);
+        self::assertSame($honeySlugs, $byName['get_honey_unit']['name']['enum']);
+        self::assertSame($honeySlugs, $byName['convert_honey_units']['fromUnit']['enum']);
+        self::assertSame($honeySlugs, $byName['convert_honey_units']['toUnit']['enum']);
+    }
+
+    /**
+     * Every enumerated unit slug in the tool schemas must actually be one Operations' underlying
+     * lookup accepts -- otherwise the model could be steered toward a value that then fails.
+     */
+    public function testEveryEnumeratedUnitSlugIsAcceptedByTheUnderlyingLookup(): void
+    {
+        foreach (array_values(Constants::VOLUME_UNIT_SLUGS) as $slug) {
+            self::assertNotNull(CalculatorApi::getVolumeUnit($slug), "volume slug '{$slug}' should be recognized");
+        }
+        foreach (array_values(Constants::HONEY_UNIT_SLUGS) as $slug) {
+            self::assertNotNull(CalculatorApi::getHoneyUnit($slug), "honey slug '{$slug}' should be recognized");
+        }
     }
 }
