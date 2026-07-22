@@ -117,6 +117,13 @@ function discordOAuthClient(): ?DiscordOAuth
 
 $router = new Router();
 
+// Root path -> the web app (public/app/), so visiting the API's bare domain lands somewhere
+// useful instead of a 404.
+$router->get('/', function () {
+    header('Location: /app/');
+    exit;
+});
+
 $router->get('/api/v1/health', fn () => Operations::health());
 
 // Calories

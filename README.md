@@ -27,7 +27,8 @@ composer run serve
 
 This starts PHP's built-in server on `http://localhost:8000`, serving `public/` as the document
 root — the API under `/api/v1`, interactive docs at `/docs` (see [API docs](#api-docs) below),
-and a browser-based UI at `/app` (see [Web app](#web-app) below). For production, point your web
+and a browser-based UI at `/app` (see [Web app](#web-app) below); the root path redirects to
+`/app` so visiting the bare domain lands somewhere useful. For production, point your web
 server's document root at `public/` (an `.htaccess` is included for Apache + `mod_rewrite`; for
 nginx, route unmatched requests to `index.php`).
 

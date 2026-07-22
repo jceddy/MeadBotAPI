@@ -437,15 +437,128 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// A deliberately small markdown-ish renderer (bold, line breaks, bare-URL auto-linking) rather
-// than a full parser/dependency -- matches this project's no-build-step, no-vendored-JS style
-// (aside from Swagger UI under /docs, vendored wholesale rather than hand-maintained).
+// A small hand-rolled markdown renderer (no dependency/build step, matching this project's style
+// -- the only vendored JS anywhere is Swagger UI under /docs, wholesale rather than hand-maintained)
+// covering what CHAT_SYSTEM_PROMPT tells the model it can use: headings, bold/italic, inline code
+// and fenced code blocks, links (markdown and bare URLs), lists, blockquotes, and GFM-style pipe
+// tables. Not a full CommonMark implementation -- just enough for typical LLM chat replies.
+
+// Inline formatting, applied within a single block's already-HTML-escaped text -- safe to inject
+// as innerHTML afterward since every tag it adds wraps escaped text, never raw model output.
+function renderInline(escapedText) {
+  // Pull out inline code spans first so `` `**not bold**` `` isn't touched by the rules below.
+  const codeSpans = [];
+  let html = escapedText.replace(/`([^`]+)`/g, (_, code) => {
+    codeSpans.push(code);
+    return ` ${codeSpans.length - 1} `;
+  });
+
+  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  html = html.replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, (_, a, b) => `<strong>${a ?? b}</strong>`);
+  html = html.replace(/\*([^*]+)\*|(?<![\w])_([^_]+)_(?![\w])/g, (_, a, b) => `<em>${a ?? b}</em>`);
+  // Bare URLs, skipping ones already wrapped by the markdown-link rule above (href="..." or the
+  // link text itself, which for a bare-URL-as-link-text markdown link would duplicate otherwise).
+  html = html.replace(/(^|[^">])(https?:\/\/[^\s<]+)/g, (m, pre, url) => `${pre}<a href="${url}" target="_blank" rel="noopener">${url}</a>`);
+
+  return html.replace(/ (\d+) /g, (_, i) => `<code>${codeSpans[Number(i)]}</code>`);
+}
+
+function splitTableRow(line) {
+  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
+}
+
+const TABLE_SEPARATOR_RE = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
+const BLOCK_START_RE = /^(```|#{1,6}\s|>\s?|[-*+]\s|\d+[.)]\s)/;
+
 function renderMarkdownish(text) {
-  let html = escapeHtml(text);
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
-  html = html.replace(/\n/g, '<br>');
-  return html;
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  const blocks = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (line.trim() === '') {
+      i++;
+      continue;
+    }
+
+    const fence = line.match(/^```(\S*)\s*$/);
+    if (fence) {
+      const codeLines = [];
+      i++;
+      while (i < lines.length && !/^```\s*$/.test(lines[i])) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      i++; // skip closing fence (or end of text, if the model never closed it)
+      blocks.push(`<pre><code>${escapeHtml(codeLines.join('\n'))}</code></pre>`);
+      continue;
+    }
+
+    const heading = line.match(/^(#{1,6})\s+(.*)$/);
+    if (heading) {
+      const level = heading[1].length;
+      blocks.push(`<h${level}>${renderInline(escapeHtml(heading[2]))}</h${level}>`);
+      i++;
+      continue;
+    }
+
+    if (/^>\s?/.test(line)) {
+      const quoteLines = [];
+      while (i < lines.length && /^>\s?/.test(lines[i])) {
+        quoteLines.push(lines[i].replace(/^>\s?/, ''));
+        i++;
+      }
+      blocks.push(`<blockquote>${renderInline(escapeHtml(quoteLines.join('\n'))).replace(/\n/g, '<br>')}</blockquote>`);
+      continue;
+    }
+
+    if (line.includes('|') && i + 1 < lines.length && TABLE_SEPARATOR_RE.test(lines[i + 1])) {
+      const headerCells = splitTableRow(line);
+      i += 2;
+      const bodyRows = [];
+      while (i < lines.length && lines[i].includes('|') && lines[i].trim() !== '') {
+        bodyRows.push(splitTableRow(lines[i]));
+        i++;
+      }
+      const headHtml = headerCells.map((c) => `<th>${renderInline(escapeHtml(c))}</th>`).join('');
+      const bodyHtml = bodyRows
+        .map((row) => `<tr>${row.map((c) => `<td>${renderInline(escapeHtml(c))}</td>`).join('')}</tr>`)
+        .join('');
+      blocks.push(`<table><thead><tr>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`);
+      continue;
+    }
+
+    if (/^[-*+]\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^[-*+]\s+/.test(lines[i])) {
+        items.push(lines[i].replace(/^[-*+]\s+/, ''));
+        i++;
+      }
+      blocks.push(`<ul>${items.map((item) => `<li>${renderInline(escapeHtml(item))}</li>`).join('')}</ul>`);
+      continue;
+    }
+
+    if (/^\d+[.)]\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\d+[.)]\s+/.test(lines[i])) {
+        items.push(lines[i].replace(/^\d+[.)]\s+/, ''));
+        i++;
+      }
+      blocks.push(`<ol>${items.map((item) => `<li>${renderInline(escapeHtml(item))}</li>`).join('')}</ol>`);
+      continue;
+    }
+
+    const paraLines = [];
+    while (i < lines.length && lines[i].trim() !== '' && (paraLines.length === 0 || !BLOCK_START_RE.test(lines[i]))) {
+      paraLines.push(lines[i]);
+      i++;
+    }
+    blocks.push(`<p>${renderInline(escapeHtml(paraLines.join('\n'))).replace(/\n/g, '<br>')}</p>`);
+  }
+
+  return blocks.join('');
 }
 
 function appendChatMessage(role, text) {
