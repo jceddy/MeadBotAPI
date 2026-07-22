@@ -29,6 +29,7 @@ tags:
   - name: Dates
   - name: Misc
   - name: Chat
+  - name: Auth
   - name: Balance
 
 paths:
@@ -1302,6 +1303,170 @@ paths:
                         $ref: '#/components/schemas/ChatUsage'
                       costUsd:
                         type: number
+
+  /chat/web:
+    post:
+      tags: [Chat]
+      summary: Same as POST /chat, but gated by a Discord login session instead of X-Api-Key
+      description: >
+        Used by the browser UI at /app (public/app/) so it can offer chat without shipping
+        CHAT_API_KEY to a public client, which anyone could view-source and use to call POST
+        /chat directly and unlimited. Requires an active login session established via GET
+        /auth/discord/login — responds 400 with `requiresLogin: true` if none is present. Runs
+        the exact same chat-agent logic as POST /chat otherwise, and records usage against the
+        logged-in Discord user's id (the same identifier space MeadBot's X-User-Id header
+        populates), so bot and web usage for the same person aggregate together in
+        GET /balance/usage-by-user. Not usable outside a browser — auth is a session cookie, not
+        a bearer credential this page can demonstrate.
+      operationId: chatWeb
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messages]
+              properties:
+                messages:
+                  type: array
+                  description: Same shape as POST /chat's `messages`.
+                  items:
+                    type: object
+                    properties:
+                      role: { type: string, enum: [system, user, assistant, tool] }
+                      content: { type: string, nullable: true }
+                model:
+                  type: string
+                  enum: [gpt, ds]
+                  default: ds
+                  description: Same as POST /chat's `model`.
+      responses:
+        '200':
+          description: Same shape as POST /chat's 200 response.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      reply: { type: string }
+                      messages:
+                        type: array
+                        items:
+                          type: object
+                      usage:
+                        $ref: '#/components/schemas/ChatUsage'
+                      costUsd:
+                        type: number
+        '400':
+          description: >
+            Missing/invalid request, not logged in (`requiresLogin: true`), chat not configured
+            on this server, or a Fireworks API/network failure. See POST /chat's 400 response for
+            the rest of the shape (`insufficientBalance`, `exceededToolIterations`, `usage`,
+            `costUsd` when applicable).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - type: object
+                    properties:
+                      requiresLogin:
+                        type: boolean
+                        description: True when the request failed because there's no logged-in session.
+
+  /auth/discord/login:
+    get:
+      tags: [Auth]
+      summary: Start the "Login with Discord" flow for the web app
+      description: >
+        Generates a CSRF `state` value, stores it in the session, and redirects the browser to
+        Discord's OAuth2 authorize page (scope `identify` only — no email or other data
+        requested). Not meant to be called via fetch/XHR or tried from Swagger UI — visit it
+        directly in a browser tab, as public/app/'s "Login with Discord" button does.
+      operationId: discordLogin
+      responses:
+        '302':
+          description: Redirect to Discord's authorize page.
+        '400':
+          description: Discord login is not configured on this server (missing DISCORD_CLIENT_ID/DISCORD_CLIENT_SECRET/DISCORD_REDIRECT_URI).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/discord/callback:
+    get:
+      tags: [Auth]
+      summary: Discord OAuth2 redirect target — completes login and redirects back to /app/
+      description: >
+        Validates `state` against the value stored by GET /auth/discord/login, exchanges `code`
+        for an access token, fetches the Discord user's id, stores it in the session, and
+        redirects to /app/. Called by Discord itself, not the web app directly.
+      operationId: discordCallback
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to /app/ on success.
+        '400':
+          description: Invalid/expired state, missing code, Discord login not configured, or the Discord token/profile exchange failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Clear the current login session
+      operationId: authLogout
+      responses:
+        '200':
+          description: Always succeeds, whether or not a session was present.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessFlag'
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Report the current login state
+      description: Used by public/app/'s app.js to toggle the login/logout buttons and the chat form.
+      operationId: authMe
+      responses:
+        '200':
+          description: Current login state.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      loggedIn:
+                        type: boolean
+                      user:
+                        type: object
+                        nullable: true
+                        description: Present only when loggedIn is true.
+                        properties:
+                          id:
+                            type: string
+                            description: The logged-in user's Discord snowflake id.
+                          username:
+                            type: string
 
   /chat/feedback:
     post:

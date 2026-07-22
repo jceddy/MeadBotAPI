@@ -26,9 +26,10 @@ composer run serve
 ```
 
 This starts PHP's built-in server on `http://localhost:8000`, serving `public/` as the document
-root — the API under `/api/v1` and interactive docs at `/docs` (see [API docs](#api-docs)
-below). For production, point your web server's document root at `public/` (an `.htaccess` is
-included for Apache + `mod_rewrite`; for nginx, route unmatched requests to `index.php`).
+root — the API under `/api/v1`, interactive docs at `/docs` (see [API docs](#api-docs) below),
+and a browser-based UI at `/app` (see [Web app](#web-app) below). For production, point your web
+server's document root at `public/` (an `.htaccess` is included for Apache + `mod_rewrite`; for
+nginx, route unmatched requests to `index.php`).
 
 ## Deployment
 
@@ -97,6 +98,11 @@ route called with the wrong HTTP method, and `200` otherwise.
 | GET | `/api/v1/random` | `max` | `RandomInteger` |
 | POST | `/api/v1/hours-string` | `timing`, `break3` (required only when `timing` is `"break"`) | `MakeHoursString` |
 | POST | `/api/v1/chat` | `messages` (OpenAI-style conversation). Requires header `X-Api-Key`. | — (see [Chat agent](#chat-agent)) |
+| POST | `/api/v1/chat/web` | `messages` (same shape as `/chat`). Requires a logged-in session (see [Web app](#web-app)) instead of `X-Api-Key`. | — (see [Web app](#web-app)) |
+| GET | `/api/v1/auth/discord/login` | — . Redirects to Discord. | — (see [Web app](#web-app)) |
+| GET | `/api/v1/auth/discord/callback` | `code`, `state` (from Discord's redirect). Redirects to `/app/`. | — (see [Web app](#web-app)) |
+| POST | `/api/v1/auth/logout` | — | — (see [Web app](#web-app)) |
+| GET | `/api/v1/auth/me` | — | — (see [Web app](#web-app)) |
 | POST | `/api/v1/chat/feedback` | `discordUserId`, `discordMessageId`, `messages`, `discordChannelId`/`discordGuildId` (optional). Requires header `X-Api-Key`. | — (see [Chat agent](#chat-agent)) |
 | GET | `/api/v1/balance` | — . Requires header `X-Api-Key`. | — (see [Balance ledger](#balance-ledger)) |
 | POST | `/api/v1/balance/deposits` | `amountUsd`, `note` (optional). Requires header `X-Api-Key`. | — (see [Balance ledger](#balance-ledger)) |
@@ -238,6 +244,69 @@ computed from the requested model's rates above; there's no env-var override for
 new entry to `ModelCatalog` (and update this table) if Fireworks' pricing changes or another model
 is worth adding.
 
+## Web app
+
+`/app` (`public/app/`) is a small browser UI, served as static files alongside the API — plain
+HTML/CSS/vanilla JS, no build step, no framework, no npm dependency (the only vendored
+third-party code in this repo remains Swagger UI under `public/docs/`). It has two tabs:
+
+- **Calculators** — a form for every calculator/lookup endpoint in the [API](#api) table above
+  (everything except `/health`, `/chat`, `/chat/web`, `/chat/feedback`, `/balance*`, and
+  `/auth/*`), generated from a declarative config in `app.js` rather than hand-written per
+  endpoint. These call the same public, unauthenticated REST routes directly — no login needed.
+- **Chat** — a browser client for the chat agent (see [Chat agent](#chat-agent) above), gated
+  behind Discord login (see below).
+
+### Why chat needs a login
+
+`/api/v1/chat` is gated by `CHAT_API_KEY` because every call triggers paid Fireworks usage.
+That key can't be shipped to a public browser client — anyone could view-source it and call
+`/api/v1/chat` directly, unlimited, bypassing whatever the UI does. Instead, `POST
+/api/v1/chat/web` requires a logged-in session (no `X-Api-Key`) and proxies into the same
+[`runChat()`](public/index.php) logic `/api/v1/chat` uses. The login itself is "Login with
+Discord" (OAuth2, `identify` scope only — no email or other data requested): the logged-in
+user's Discord snowflake ID is used as the ledger's `userId`, the same identifier space
+MeadBot's `X-User-Id` header already populates for bot usage, so one person's Discord-bot and
+web-app chat usage aggregate together automatically in `GET /balance/usage-by-user` (see
+[Per-user usage](#per-user-usage)) — no separate account system, and no additional rate-limiting,
+consistent with the ledger's tracking-only philosophy.
+
+The flow: `GET /api/v1/auth/discord/login` redirects to Discord (storing a random `state` value
+in the session first, to guard against CSRF); Discord redirects back to `GET
+/api/v1/auth/discord/callback` with a `code`, which is validated against that `state` and
+exchanged for the user's Discord id, stored in the PHP session; the browser is then redirected
+back to `/app/`. `GET /api/v1/auth/me` reports the current login state (used by `app.js` to
+toggle the login/logout buttons and the chat form), and `POST /api/v1/auth/logout` clears the
+session. The session cookie is `httponly`/`SameSite=Lax` (and `Secure` whenever the request
+arrived over HTTPS, including behind a reverse proxy that forwards `X-Forwarded-Proto`), so it
+isn't readable or forgeable from JS or a cross-site request.
+
+### Setup
+
+Requires a Discord application's OAuth2 credentials — reusing MeadBot's existing Discord
+application (from its [Developer Portal](https://discord.com/developers/applications) entry) is
+the simplest option, since it needs no new bot/permissions, just an OAuth2 redirect registered
+for this API's callback URL:
+
+- `DISCORD_CLIENT_ID` — the application's client ID.
+- `DISCORD_CLIENT_SECRET` — the application's client secret.
+- `DISCORD_REDIRECT_URI` — this API's callback URL, e.g.
+  `https://api.example.com/api/v1/auth/discord/callback` — must also be added under
+  **OAuth2 → Redirects** on the Discord application, exactly matching (Discord rejects a
+  mismatch).
+
+Add all three as **GitHub Actions repository secrets** (same place as `FTP_HOST` etc.) —
+`deploy.yml` writes them into the same `.env` file as the chat secrets. If any is missing/empty,
+`/api/v1/auth/discord/login` and `/api/v1/auth/discord/callback` respond with
+`{"error":true,"errorMessage":"Discord login is not configured on this server."}`, and the web
+app's Chat tab shows a "not configured" state instead of a login button — the Calculators tab and
+every other endpoint are unaffected.
+
+For local development, add the same three lines to your `.env` file (gitignored, not deployed by
+CI), using a redirect URI pointing at your local server, e.g.
+`DISCORD_REDIRECT_URI=http://localhost:8000/api/v1/auth/discord/callback` (also registered under
+that same application's OAuth2 redirects).
+
 ## Balance ledger
 
 A small MySQL-backed ledger tracks the prepaid Fireworks balance: every `/api/v1/chat` request
@@ -348,7 +417,10 @@ pointing at a local or dev database you've applied the same migrations to.
   each mapped to a Fireworks model id and per-1M-token pricing.
 - `src/Ledger/Ledger.php` - the balance ledger (usage logging, deposits, running balance) used by
   `/api/v1/chat` and `/api/v1/balance*`; see [Balance ledger](#balance-ledger).
+- `src/Auth/DiscordOAuth.php` - minimal Discord OAuth2 client used by `/api/v1/auth/discord/*`;
+  see [Web app](#web-app).
 - `migrations/` - numbered SQL files describing the ledger's schema; apply manually (see
   [Balance ledger](#balance-ledger)) — never applied automatically.
 - `tests/` - PHPUnit tests, run with `composer test`.
 - `public/docs/` - OpenAPI spec and Swagger UI, served at `/docs`.
+- `public/app/` - the browser UI (calculators + Discord-gated chat); see [Web app](#web-app).

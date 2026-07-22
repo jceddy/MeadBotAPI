@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MeadBot Tools</title>
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <header class="site-header">
+    <h1>🍯 MeadBot Tools</h1>
+    <p>Mead-brewing calculators and chat, from the same API MeadBot's Discord bot uses. See <a href="/docs">/docs</a> for the full API reference.</p>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-button is-active" data-tab="calculators-panel" type="button">Calculators</button>
+    <button class="tab-button" data-tab="chat-panel" type="button">Chat</button>
+  </nav>
+
+  <main>
+    <section id="calculators-panel" class="tab-panel is-active">
+      <div id="calculators"></div>
+    </section>
+
+    <section id="chat-panel" class="tab-panel">
+      <div class="chat-container">
+        <div class="chat-auth">
+          <span id="chat-auth-status">Checking login state...</span>
+          <button id="chat-login-btn" type="button" hidden>Login with Discord</button>
+          <button id="chat-logout-btn" type="button" hidden>Log out</button>
+        </div>
+
+        <div id="chat-log" class="chat-log"></div>
+
+        <form id="chat-form" class="chat-form" hidden>
+          <input id="chat-input" type="text" placeholder="Ask about mead-making, or a calculation..." autocomplete="off" required />
+          <button type="submit">Send</button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
