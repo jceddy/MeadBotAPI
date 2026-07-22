@@ -57,6 +57,9 @@ jobs:
           cat > .env <<EOF
           FIREWORKS_API_KEY=${{ secrets.FIREWORKS_API_KEY }}
           CHAT_API_KEY=${{ secrets.CHAT_API_KEY }}
+          DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}
+          DISCORD_CLIENT_SECRET=${{ secrets.DISCORD_CLIENT_SECRET }}
+          DISCORD_REDIRECT_URI=${{ secrets.DISCORD_REDIRECT_URI }}
           MYSQL_DB_HOST=${{ secrets.MYSQL_DB_HOST }}
           MYSQL_DB_PORT=${{ secrets.MYSQL_DB_PORT }}
           MYSQL_DB_DATABASE=${{ secrets.MYSQL_DB_DATABASE }}
