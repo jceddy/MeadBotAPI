@@ -105,6 +105,27 @@ final class Constants
         self::HONEY_UNIT_QUARTS_IMP => ['name' => 'Quart(s) Imp', 'conversion' => 1.6342258466305675481094],
     ];
 
+    // canonical (non-alias) slug for each honey unit, matching MeadBot's HONEY_UNITS keys
+    // lowercased — used by Chat\Tools' convert_honey_units/get_honey_unit tool schemas, not by
+    // getHoneyUnit() (which additionally accepts many aliases per unit)
+    public const HONEY_UNIT_SLUGS = [
+        self::HONEY_UNIT_KILOGRAMS => 'kilograms',
+        self::HONEY_UNIT_POUNDS => 'pounds',
+        self::HONEY_UNIT_LITERS => 'liters',
+        self::HONEY_UNIT_GALLONS_US => 'gallons_us',
+        self::HONEY_UNIT_GALLONS_IMP => 'gallons_imp',
+        self::HONEY_UNIT_OUNCES => 'ounces',
+        self::HONEY_UNIT_CUPS_US => 'cups_us',
+        self::HONEY_UNIT_CUPS_IMP => 'cups_imp',
+        self::HONEY_UNIT_CUPS_METRIC => 'cups_metric',
+        self::HONEY_UNIT_FL_OUNCES_US => 'fl_ounces_us',
+        self::HONEY_UNIT_FL_OUNCES_IMP => 'fl_ounces_imp',
+        self::HONEY_UNIT_PINTS_US => 'pints_us',
+        self::HONEY_UNIT_PINTS_IMP => 'pints_imp',
+        self::HONEY_UNIT_QUARTS_US => 'quarts_us',
+        self::HONEY_UNIT_QUARTS_IMP => 'quarts_imp',
+    ];
+
     // temperature unit identifiers
     public const TEMPERATURE_UNIT_CELSIUS = 0;
     public const TEMPERATURE_UNIT_FAHRENHEIT = 1;
