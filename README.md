@@ -170,13 +170,13 @@ curl -s -X POST http://localhost:8000/api/v1/chat \
 
 The response's `usage` is the *sum* across every Fireworks call the request made — one `/chat`
 call can trigger several (one per tool-calling round) — split into `prompt_tokens` (total input),
-`cached_prompt_tokens` (the subset that hit Fireworks' prompt cache, billed at a lower rate — see
-[Setup](#setup) below), and `completion_tokens`. `costUsd` is computed from that using the
-`FIREWORKS_PRICE_*` rates described below; it's an estimate for cost tracking, not a
-billing-authoritative figure (Fireworks' own dashboard is). Both fields are included even on a
-`400` error response whenever at least one underlying call completed before the failure (e.g. a
-later tool-call round failed, or the agent hit its iteration cap) — those calls were still billed
-by Fireworks regardless of whether the request as a whole succeeded.
+`cached_prompt_tokens` (the subset that hit Fireworks' prompt cache, billed at a lower rate), and
+`completion_tokens`. `costUsd` is computed from that using the requested model's pricing (see
+[Setup](#setup) below); it's an estimate for cost tracking, not a billing-authoritative figure
+(Fireworks' own dashboard is). Both fields are included even on a `400` error response whenever at
+least one underlying call completed before the failure (e.g. a later tool-call round failed, or
+the agent hit its iteration cap) — those calls were still billed by Fireworks regardless of
+whether the request as a whole succeeded.
 
 ### Negative feedback
 
@@ -224,15 +224,19 @@ FIREWORKS_API_KEY=...
 CHAT_API_KEY=...
 ```
 
-The model defaults to `accounts/fireworks/models/gpt-oss-120b` (OpenAI's open-weight
-reasoning/tool-calling model, hosted on Fireworks); override it with a third `.env` line,
-`FIREWORKS_MODEL=accounts/fireworks/models/...`, to try another one.
+`POST /chat` accepts an optional `model` field selecting which Fireworks-hosted model to run that
+turn against, from a small hardcoded catalog in `src/Chat/ModelCatalog.php`:
 
-`costUsd` in the response is computed from `FIREWORKS_PRICE_INPUT_PER_1M`,
-`FIREWORKS_PRICE_CACHED_INPUT_PER_1M`, and `FIREWORKS_PRICE_OUTPUT_PER_1M` (each a dollar rate
-per 1M tokens), defaulting to gpt-oss-120b's published pricing (`0.15` / `0.01` / `0.60`). If you
-change `FIREWORKS_MODEL`, set these three to match its pricing — they aren't looked up
-automatically.
+| `model` | Fireworks model | Price per 1M tokens (input / cached input / output) |
+| --- | --- | --- |
+| `gpt` (default) | `accounts/fireworks/models/gpt-oss-120b` (OpenAI's open-weight reasoning/tool-calling model) | $0.15 / $0.014 / $0.60 |
+| `ds` | `accounts/fireworks/models/deepseek-v4-flash` | $0.14 / $0.028 / $0.28 |
+
+Omitting `model` (or MeadBot's `!chat` command omitting its `--model`/`-m` flag) uses `gpt`. An
+unrecognized `model` value gets a `400` error listing the valid keys. `costUsd` in the response is
+computed from the requested model's rates above; there's no env-var override for these — add a
+new entry to `ModelCatalog` (and update this table) if Fireworks' pricing changes or another model
+is worth adding.
 
 ## Balance ledger
 
@@ -340,6 +344,8 @@ pointing at a local or dev database you've applied the same migrations to.
   chat-completions endpoint.
 - `src/Chat/ChatAgent.php` - the tool-calling loop used by `/api/v1/chat`.
 - `src/Chat/CostCalculator.php` - turns a token-usage total into an estimated USD cost.
+- `src/Chat/ModelCatalog.php` - the `gpt`/`ds` model keys `/api/v1/chat`'s `model` field accepts,
+  each mapped to a Fireworks model id and per-1M-token pricing.
 - `src/Ledger/Ledger.php` - the balance ledger (usage logging, deposits, running balance) used by
   `/api/v1/chat` and `/api/v1/balance*`; see [Balance ledger](#balance-ledger).
 - `migrations/` - numbered SQL files describing the ledger's schema; apply manually (see

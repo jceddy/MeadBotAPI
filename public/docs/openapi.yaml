@@ -1230,6 +1230,16 @@ paths:
                     properties:
                       role: { type: string, enum: [system, user, assistant, tool] }
                       content: { type: string, nullable: true }
+                model:
+                  type: string
+                  enum: [gpt, ds]
+                  default: gpt
+                  description: >
+                    Which Fireworks-hosted model to run this turn against — `gpt` for
+                    gpt-oss-120b (the default) or `ds` for DeepSeek-V4-Flash. See
+                    MeadBotApi\Chat\ModelCatalog for each model's Fireworks model id and the
+                    per-1M-token pricing `costUsd` is computed from. A 400 error is returned if
+                    this is present but not one of the two keys above.
               example:
                 messages:
                   - role: user
@@ -1259,9 +1269,9 @@ paths:
                       costUsd:
                         type: number
                         description: >
-                          Estimated USD cost of `usage`, from the FIREWORKS_PRICE_* rates
-                          configured on the server (defaults match gpt-oss-120b's published
-                          pricing). Not billing-authoritative — Fireworks' own usage dashboard is.
+                          Estimated USD cost of `usage`, from the requested `model`'s pricing in
+                          MeadBotApi\Chat\ModelCatalog. Not billing-authoritative — Fireworks' own
+                          usage dashboard is.
         '400':
           description: >
             Missing/invalid request, missing/invalid `X-Api-Key`, chat not configured on this

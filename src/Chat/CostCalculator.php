@@ -6,8 +6,8 @@ namespace MeadBotApi\Chat;
 
 /**
  * Computes the USD cost of a chat-completion usage total from Fireworks' per-1M-token pricing.
- * Rates are per-model (see the FIREWORKS_PRICE_* env vars read in public/index.php) rather than
- * hardcoded, since they'd go stale if FIREWORKS_MODEL is ever changed to a different model.
+ * Rates are passed in per-model (see MeadBotApi\Chat\ModelCatalog, which builds one of these per
+ * model in its catalog) rather than hardcoded here.
  */
 final class CostCalculator
 {
