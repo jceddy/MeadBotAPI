@@ -15,7 +15,10 @@ use Throwable;
  */
 final class ChatAgent
 {
-    private const MAX_TOOL_ITERATIONS = 6;
+    // Raised from 6 -- some legitimate questions need to integrate several tool calls' worth of
+    // results and were hitting the old cap before reaching an answer. Temporary while usage is
+    // monitored; revisit (and consider whether it should vary per model) after more real traffic.
+    private const MAX_TOOL_ITERATIONS = 12;
 
     private FireworksClient $client;
 
