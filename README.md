@@ -229,10 +229,10 @@ turn against, from a small hardcoded catalog in `src/Chat/ModelCatalog.php`:
 
 | `model` | Fireworks model | Price per 1M tokens (input / cached input / output) |
 | --- | --- | --- |
-| `gpt` (default) | `accounts/fireworks/models/gpt-oss-120b` (OpenAI's open-weight reasoning/tool-calling model) | $0.15 / $0.014 / $0.60 |
-| `ds` | `accounts/fireworks/models/deepseek-v4-flash` | $0.14 / $0.028 / $0.28 |
+| `ds` (default) | `accounts/fireworks/models/deepseek-v4-flash` | $0.14 / $0.028 / $0.28 |
+| `gpt` | `accounts/fireworks/models/gpt-oss-120b` (OpenAI's open-weight reasoning/tool-calling model) | $0.15 / $0.014 / $0.60 |
 
-Omitting `model` (or MeadBot's `!chat` command omitting its `--model`/`-m` flag) uses `gpt`. An
+Omitting `model` (or MeadBot's `!chat` command omitting its `--model`/`-m` flag) uses `ds`. An
 unrecognized `model` value gets a `400` error listing the valid keys. `costUsd` in the response is
 computed from the requested model's rates above; there's no env-var override for these — add a
 new entry to `ModelCatalog` (and update this table) if Fireworks' pricing changes or another model

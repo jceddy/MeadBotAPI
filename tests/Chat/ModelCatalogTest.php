@@ -9,9 +9,9 @@ use PHPUnit\Framework\TestCase;
 
 final class ModelCatalogTest extends TestCase
 {
-    public function testDefaultKeyIsGpt(): void
+    public function testDefaultKeyIsDs(): void
     {
-        self::assertSame('gpt', ModelCatalog::DEFAULT_KEY);
+        self::assertSame('ds', ModelCatalog::DEFAULT_KEY);
     }
 
     public function testHasRecognizesBothBuiltInKeysButNotAnUnknownOne(): void

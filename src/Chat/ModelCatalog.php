@@ -12,7 +12,7 @@ namespace MeadBotApi\Chat;
  */
 final class ModelCatalog
 {
-    public const DEFAULT_KEY = 'gpt';
+    public const DEFAULT_KEY = 'ds';
 
     private const MODELS = [
         'gpt' => [

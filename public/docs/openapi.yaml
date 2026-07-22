@@ -1233,10 +1233,10 @@ paths:
                 model:
                   type: string
                   enum: [gpt, ds]
-                  default: gpt
+                  default: ds
                   description: >
-                    Which Fireworks-hosted model to run this turn against — `gpt` for
-                    gpt-oss-120b (the default) or `ds` for DeepSeek-V4-Flash. See
+                    Which Fireworks-hosted model to run this turn against — `ds` for
+                    DeepSeek-V4-Flash (the default) or `gpt` for gpt-oss-120b. See
                     MeadBotApi\Chat\ModelCatalog for each model's Fireworks model id and the
                     per-1M-token pricing `costUsd` is computed from. A 400 error is returned if
                     this is present but not one of the two keys above.
