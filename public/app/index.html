@@ -30,6 +30,14 @@
           <button id="chat-logout-btn" type="button" hidden>Log out</button>
         </div>
 
+        <div id="chat-controls" class="chat-controls" hidden>
+          <label for="chat-model">Model</label>
+          <select id="chat-model">
+            <option value="ds" selected>DeepSeek V4 Flash (default)</option>
+            <option value="gpt">GPT-OSS 120B</option>
+          </select>
+        </div>
+
         <div id="chat-log" class="chat-log"></div>
 
         <form id="chat-form" class="chat-form" hidden>

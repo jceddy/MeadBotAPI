@@ -203,6 +203,18 @@ button:hover {
   color: var(--text-muted);
 }
 
+.chat-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.chat-controls select {
+  width: auto;
+}
+
 .chat-log {
   min-height: 300px;
   max-height: 60vh;
