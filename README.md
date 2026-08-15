@@ -256,7 +256,9 @@ third-party code in this repo remains Swagger UI under `public/docs/`). It has t
   `/auth/*`), generated from a declarative config in `app.js` rather than hand-written per
   endpoint. These call the same public, unauthenticated REST routes directly — no login needed.
 - **Chat** — a browser client for the chat agent (see [Chat agent](#chat-agent) above), gated
-  behind Discord login (see below).
+  behind Discord login (see below). A model dropdown (populated with the same `gpt`/`ds` keys
+  from `ModelCatalog` — see [Chat agent](#chat-agent)) lets a logged-in user pick which model
+  each message is sent to, same as MeadBot's `!chat --model`/`-m` flag.
 
 ### Why chat needs a login
 

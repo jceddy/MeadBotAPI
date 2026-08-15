@@ -577,17 +577,20 @@ async function refreshLoginState() {
   const loginBtn = document.getElementById('chat-login-btn');
   const logoutBtn = document.getElementById('chat-logout-btn');
   const chatForm = document.getElementById('chat-form');
+  const chatControls = document.getElementById('chat-controls');
 
   if (currentUser) {
     status.textContent = `Logged in as ${currentUser.username}`;
     loginBtn.hidden = true;
     logoutBtn.hidden = false;
     chatForm.hidden = false;
+    chatControls.hidden = false;
   } else {
     status.textContent = 'Log in with Discord to chat.';
     loginBtn.hidden = false;
     logoutBtn.hidden = true;
     chatForm.hidden = true;
+    chatControls.hidden = true;
   }
 }
 
@@ -616,13 +619,15 @@ function initChat() {
     appendChatMessage('user', text);
     input.value = '';
     input.disabled = true;
+    const modelSelect = document.getElementById('chat-model');
+    modelSelect.disabled = true;
 
     const pending = appendChatMessage('assistant', 'Thinking...');
     try {
       const result = await fetch('/api/v1/chat/web', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: chatMessages }),
+        body: JSON.stringify({ messages: chatMessages, model: modelSelect.value }),
       }).then((r) => r.json());
 
       if (result.error) {
@@ -643,6 +648,7 @@ function initChat() {
       chatMessages.pop();
     } finally {
       input.disabled = false;
+      modelSelect.disabled = false;
       input.focus();
       document.getElementById('chat-log').scrollTop = document.getElementById('chat-log').scrollHeight;
     }
