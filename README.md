@@ -236,7 +236,7 @@ turn against, from a small hardcoded catalog in `src/Chat/ModelCatalog.php`:
 
 | `model` | Fireworks model | Price per 1M tokens (input / cached input / output) |
 | --- | --- | --- |
-| `ds` (default) | `accounts/fireworks/models/deepseek-v4-flash` | $0.14 / $0.028 / $0.28 |
+| `ds` (default) | `accounts/fireworks/models/deepseek-v4-flash-0731` | $0.14 / $0.028 / $0.28 |
 | `gpt` | `accounts/fireworks/models/gpt-oss-120b` (OpenAI's open-weight reasoning/tool-calling model) | $0.15 / $0.014 / $0.60 |
 
 Omitting `model` (or MeadBot's `!chat` command omitting its `--model`/`-m` flag) uses `ds`. An
