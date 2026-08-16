@@ -22,7 +22,10 @@ final class ModelCatalog
             'outputPricePerMillion' => 0.60,
         ],
         'ds' => [
-            'fireworksModel' => 'accounts/fireworks/models/deepseek-v4-flash',
+            // Fireworks retired the unversioned deepseek-v4-flash id in favor of this official
+            // 0731 release (requests to the old id now 404 with "Model not found, inaccessible,
+            // and/or not deployed").
+            'fireworksModel' => 'accounts/fireworks/models/deepseek-v4-flash-0731',
             'inputPricePerMillion' => 0.14,
             'cachedInputPricePerMillion' => 0.028,
             'outputPricePerMillion' => 0.28,

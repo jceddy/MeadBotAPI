@@ -29,7 +29,7 @@ final class ModelCatalogTest extends TestCase
     public function testFireworksModelMapsEachKeyToItsAccountModelId(): void
     {
         self::assertSame('accounts/fireworks/models/gpt-oss-120b', ModelCatalog::fireworksModel('gpt'));
-        self::assertSame('accounts/fireworks/models/deepseek-v4-flash', ModelCatalog::fireworksModel('ds'));
+        self::assertSame('accounts/fireworks/models/deepseek-v4-flash-0731', ModelCatalog::fireworksModel('ds'));
     }
 
     public function testPricingMatchesEachModelsPublishedFireworksRates(): void
