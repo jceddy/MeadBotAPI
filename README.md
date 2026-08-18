@@ -236,14 +236,23 @@ turn against, from a small hardcoded catalog in `src/Chat/ModelCatalog.php`:
 
 | `model` | Fireworks model | Price per 1M tokens (input / cached input / output) |
 | --- | --- | --- |
-| `ds` (default) | `accounts/fireworks/models/deepseek-v4-flash-0731` | $0.14 / $0.028 / $0.28 |
+| `ds` (default) | `accounts/fireworks/models/deepseek-v4-flash-0731` | $0.14 / $0.028 / $0.28, until $0.44 / $0.014 / $1.32 takes effect 2026-08-21†|
 | `gpt` | `accounts/fireworks/models/gpt-oss-120b` (OpenAI's open-weight reasoning/tool-calling model) | $0.15 / $0.014 / $0.60 |
+
+† Fireworks is aligning `ds`'s rates with DeepSeek's own updated pricing, effective 2026-08-21 —
+already pre-populated as a dated tier (see below) so it takes effect on its own with no deploy
+needed that day.
 
 Omitting `model` (or MeadBot's `!chat` command omitting its `--model`/`-m` flag) uses `ds`. An
 unrecognized `model` value gets a `400` error listing the valid keys. `costUsd` in the response is
 computed from the requested model's rates above; there's no env-var override for these — add a
-new entry to `ModelCatalog` (and update this table) if Fireworks' pricing changes or another model
-is worth adding.
+new entry to `ModelCatalog` (and update this table) if another model is worth adding.
+
+Each model's rates in `ModelCatalog` are actually a list of dated tiers rather than a single flat
+rate, so a Fireworks-announced pricing change can be pre-populated ahead of time (with its own
+`effectiveAt` UTC timestamp) and it'll be picked up automatically the moment that time passes —
+no same-day deploy needed. `ModelCatalog::pricing()` always uses whichever tier has the latest
+`effectiveAt` that isn't in the future.
 
 ## Web app
 
