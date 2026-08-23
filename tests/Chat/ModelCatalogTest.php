@@ -34,37 +34,37 @@ final class ModelCatalogTest extends TestCase
     }
 
     /**
-     * Pins `at` to just before the ds 2026-08-21 rate change (rather than relying on
+     * Pins `at` to just before the ds 2026-08-22T12:00Z rate change (rather than relying on
      * pricing()'s real-clock default) so this test doesn't start silently asserting different
-     * numbers once that date actually passes in real time.
+     * numbers once that moment actually passes in real time.
      */
     public function testPricingMatchesEachModelsBaselinePublishedFireworksRates(): void
     {
         $usage = ['prompt_tokens' => 1_000_000, 'cached_prompt_tokens' => 0, 'completion_tokens' => 1_000_000];
-        $beforeDsRateChange = new DateTimeImmutable('2026-08-20T23:59:59Z');
+        $beforeDsRateChange = new DateTimeImmutable('2026-08-22T11:59:59Z');
 
         // gpt-oss-120b: $0.15 input / $0.014 cached input / $0.60 output per 1M tokens. Only one
         // pricing tier exists for this model, so `at` doesn't affect the result.
         self::assertEqualsWithDelta(0.15 + 0.60, ModelCatalog::pricing('gpt', $beforeDsRateChange)->costUsd($usage), 1e-9);
 
-        // DeepSeek-V4-Flash-0731, baseline tier (before 2026-08-21): $0.14 input / $0.028 cached
-        // input / $0.28 output per 1M tokens.
+        // DeepSeek-V4-Flash-0731, baseline tier (before 2026-08-22T12:00Z): $0.14 input / $0.028
+        // cached input / $0.28 output per 1M tokens.
         self::assertEqualsWithDelta(0.14 + 0.28, ModelCatalog::pricing('ds', $beforeDsRateChange)->costUsd($usage), 1e-9);
     }
 
     /**
-     * The 2026-08-21 tier was pre-populated ahead of that date specifically so it starts being
-     * used automatically once reached, with no code change/deploy needed that day -- this pins
-     * `at` to (and just after) that moment to prove it actually takes effect.
+     * The 2026-08-22T12:00Z tier was pre-populated ahead of that moment specifically so it
+     * starts being used automatically once reached, with no code change/deploy needed that day
+     * -- this pins `at` to (and just after) that moment to prove it actually takes effect.
      */
     public function testPricingSwitchesDsToFireworksAnnouncedRatesOnAndAfterTheEffectiveDate(): void
     {
         $usage = ['prompt_tokens' => 1_000_000, 'cached_prompt_tokens' => 0, 'completion_tokens' => 1_000_000];
 
-        // Fireworks aligning DeepSeek-V4-Flash-0731's rates with DeepSeek's own updated pricing:
-        // $0.44 input / $0.014 cached input / $1.32 output per 1M tokens.
-        $expected = 0.44 + 1.32;
-        self::assertEqualsWithDelta($expected, ModelCatalog::pricing('ds', new DateTimeImmutable('2026-08-21T00:00:00Z'))->costUsd($usage), 1e-9);
+        // Fireworks' "DSV4 off-peak rate" (24hrs/day, despite the name): $0.22 input / $0.007
+        // cached input / $0.66 output per 1M tokens.
+        $expected = 0.22 + 0.66;
+        self::assertEqualsWithDelta($expected, ModelCatalog::pricing('ds', new DateTimeImmutable('2026-08-22T12:00:00Z'))->costUsd($usage), 1e-9);
         self::assertEqualsWithDelta($expected, ModelCatalog::pricing('ds', new DateTimeImmutable('2026-09-01T00:00:00Z'))->costUsd($usage), 1e-9);
     }
 
