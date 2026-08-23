@@ -48,14 +48,15 @@ final class ModelCatalog
                     'cachedInputPricePerMillion' => 0.028,
                     'outputPricePerMillion' => 0.28,
                 ],
-                // Fireworks is aligning this model's rates with DeepSeek's own updated pricing,
-                // effective 2026-08-21 ("this Friday" per their announcement -- no exact time of
-                // day given, so treated as 00:00 UTC).
+                // Fireworks' "DSV4 off-peak rate" -- a revision of the rate change below,
+                // announced at half the originally-announced numbers after their performance
+                // work on this model landed ahead of schedule. Applies 24hrs/day despite the
+                // "off-peak" name (there's no separate peak-hours tier).
                 [
-                    'effectiveAt' => '2026-08-21T00:00:00+00:00',
-                    'inputPricePerMillion' => 0.44,
-                    'cachedInputPricePerMillion' => 0.014,
-                    'outputPricePerMillion' => 1.32,
+                    'effectiveAt' => '2026-08-22T12:00:00+00:00',
+                    'inputPricePerMillion' => 0.22,
+                    'cachedInputPricePerMillion' => 0.007,
+                    'outputPricePerMillion' => 0.66,
                 ],
             ],
         ],
