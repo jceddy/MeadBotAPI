@@ -592,18 +592,37 @@ function appendChatMessage(role, text) {
 
 // addChatCopyButton(bubble, text) - appends a "Copy" button to an assistant reply bubble that
 // copies the original reply text (not the rendered HTML) to the clipboard.
+// Two overlapping outlined rectangles (a generic "copy" glyph) and a checkmark for the
+// briefly-shown success state -- hand-rolled inline SVG rather than an icon font/library, to
+// match this project's no-dependency style.
+const CHAT_COPY_ICON =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<rect x="8" y="8" width="13" height="13" rx="2"></rect>' +
+  '<rect x="3" y="3" width="13" height="13" rx="2"></rect>' +
+  '</svg>';
+const CHAT_COPY_CHECK_ICON =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<polyline points="20 6 9 17 4 12"></polyline>' +
+  '</svg>';
+
 function addChatCopyButton(bubble, text) {
-  const button = el('button', { class: 'chat-copy-btn', type: 'button' }, ['Copy']);
+  const button = el('button', { class: 'chat-copy-btn', type: 'button', title: 'Copy to clipboard', html: CHAT_COPY_ICON });
   button.addEventListener('click', () => copyChatText(text, button));
   bubble.appendChild(el('div', { class: 'chat-message-footer' }, [button]));
 }
 
 function copyChatText(text, button) {
   const finish = (ok) => {
-    button.textContent = ok ? 'Copied!' : 'Copy failed';
+    button.innerHTML = ok ? CHAT_COPY_CHECK_ICON : CHAT_COPY_ICON;
+    button.title = ok ? 'Copied!' : 'Copy failed';
+    button.classList.toggle('chat-copy-btn--error', !ok);
     button.disabled = true;
     setTimeout(() => {
-      button.textContent = 'Copy';
+      button.innerHTML = CHAT_COPY_ICON;
+      button.title = 'Copy to clipboard';
+      button.classList.remove('chat-copy-btn--error');
       button.disabled = false;
     }, 1500);
   };
