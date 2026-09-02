@@ -507,6 +507,18 @@ final class Operations
         return self::lookupResult($id, 'Unknown sugar source: ' . $name, $info !== null ? ['sugarSource' => $info] : []);
     }
 
+    public static function calculatePrimingSugar(array $p): array
+    {
+        return CalculatorApi::calculatePrimingSugar(
+            self::requireParam($p, 'volume'),
+            (string) self::requireParam($p, 'volumeUnit'),
+            self::requireParam($p, 'temperature'),
+            (string) self::requireParam($p, 'temperatureUnit'),
+            self::requireParam($p, 'targetCO2'),
+            (string) self::requireParam($p, 'primingSugar')
+        );
+    }
+
     public static function getDaysBetween(array $p): array
     {
         $date1 = self::requireDate($p, 'date1');

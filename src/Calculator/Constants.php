@@ -364,4 +364,19 @@ final class Constants
     // OGs / FGs for the dry-FG estimate interpolation table
     public const DRY_FG_OG_VALUES = [1.0, 1.04, 1.1, 1.144];
     public const DRY_FG_FG_VALUES = [1.0, 0.998, 0.995, 0.99];
+
+    // priming sugar identifiers that index into PRIMING_SUGAR_INFO
+    public const PRIMING_SUGAR_CORN_SUGAR = 0;
+    public const PRIMING_SUGAR_TABLE_SUGAR = 1;
+    public const PRIMING_SUGAR_DME = 2;
+    public const PRIMING_SUGAR_HONEY = 3;
+
+    // priming sugars the calculator knows about, with each one's conversion factor relative to
+    // corn sugar (dextrose), which is defined as 1.00 -- see CalculatorApi::calculatePrimingSugar()
+    public const PRIMING_SUGAR_INFO = [
+        self::PRIMING_SUGAR_CORN_SUGAR => ['name' => 'Corn Sugar (Dextrose)', 'factor' => 1.0],
+        self::PRIMING_SUGAR_TABLE_SUGAR => ['name' => 'Table Sugar (Sucrose)', 'factor' => 0.9],
+        self::PRIMING_SUGAR_DME => ['name' => 'DME (Dry Malt Extract)', 'factor' => 1.33],
+        self::PRIMING_SUGAR_HONEY => ['name' => 'Honey', 'factor' => 1.15],
+    ];
 }

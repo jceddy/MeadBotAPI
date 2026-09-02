@@ -221,6 +221,22 @@ const TOOLS = [
     ],
   },
   {
+    group: 'Recipe Building',
+    id: 'priming-sugar',
+    title: 'Priming Sugar Calculator',
+    method: 'POST',
+    path: '/api/v1/priming-sugar',
+    description: 'Estimate priming sugar needed to carbonate a batch to a target CO2 level via bottle conditioning.',
+    fields: [
+      numberField('volume', 'Batch Volume', { required: true, placeholder: '5' }),
+      selectField('volumeUnit', 'Volume Unit', ['gallons_us', 'liters', 'gallons_imp', 'quarts_us'], { default: 'gallons_us' }),
+      numberField('temperature', 'Fermentation Temp', { required: true, placeholder: '68' }),
+      selectField('temperatureUnit', 'Temp Unit', ['f', 'c'], { default: 'f' }),
+      numberField('targetCO2', 'Target CO2 (volumes)', { required: true, placeholder: '2.4' }),
+      selectField('primingSugar', 'Priming Sugar', ['corn_sugar', 'table_sugar', 'dme', 'honey'], { default: 'corn_sugar' }),
+    ],
+  },
+  {
     group: 'Lookups',
     id: 'sugar-source',
     title: 'Sugar Source Lookup',

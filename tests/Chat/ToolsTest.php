@@ -42,7 +42,7 @@ final class ToolsTest extends TestCase
         }
 
         self::assertSame($names, array_unique($names), 'tool names must be unique');
-        self::assertCount(24, $definitions, 'expected one tool per Operations method (except health/random), plus the two MeadTools wiki tools');
+        self::assertCount(25, $definitions, 'expected one tool per Operations method (except health/random), plus the two MeadTools wiki tools');
     }
 
     private static function operationFor(string $toolName): string

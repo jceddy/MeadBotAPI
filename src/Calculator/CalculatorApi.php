@@ -618,4 +618,114 @@ final class CalculatorApi
         }
         return $list;
     }
+
+    // getPrimingSugarIdentifier(sugar) - return the priming sugar identifier corresponding to a string
+    public static function getPrimingSugarIdentifier(string $sugar): ?int
+    {
+        return match ($sugar) {
+            'corn_sugar', 'corn', 'dextrose' => Constants::PRIMING_SUGAR_CORN_SUGAR,
+            'table_sugar', 'sugar', 'sucrose', 'cane_sugar' => Constants::PRIMING_SUGAR_TABLE_SUGAR,
+            'dme', 'dry_malt_extract', 'malt_extract' => Constants::PRIMING_SUGAR_DME,
+            'honey' => Constants::PRIMING_SUGAR_HONEY,
+            default => null,
+        };
+    }
+
+    /**
+     * calculatePrimingSugar(volume, volumeUnit, temperature, temperatureUnit, targetCO2,
+     * primingSugar) - estimate the priming sugar needed to carbonate a batch to a target CO2
+     * level via bottle conditioning.
+     *
+     * Uses the Zahm & Nagel residual-CO2 regression and the standard corn-sugar-per-US-gallon-
+     * per-CO2-volume priming formula (both from Hall, M.L. "Brew by the Numbers," Zymurgy Vol. 18
+     * No. 2, 1995); other sugars are derived from corn sugar via Constants::PRIMING_SUGAR_INFO's
+     * conversion factors. These are long-standing homebrewing approximations, not exact figures.
+     *
+     * @return array<string, mixed>
+     */
+    public static function calculatePrimingSugar(
+        mixed $volume,
+        string $volumeUnit,
+        mixed $temperature,
+        string $temperatureUnit,
+        mixed $targetCO2,
+        string $primingSugar
+    ): array {
+        if (self::isNotNumeric($volume)) {
+            return self::makeError('volume ' . $volume . ' is not a number.', 'volume', 0, Constants::ERROR_IS_NAN);
+        }
+        $volume = self::toFloat($volume);
+
+        $volumeUnitId = self::getVolumeUnit($volumeUnit);
+        if ($volumeUnitId === null) {
+            return self::makeError('Unknown volume unit: ' . $volumeUnit, 'volumeUnit', 1, Constants::ERROR_INVALID_ARGUMENTS);
+        }
+        $volumeUnitInfo = Constants::VOLUME_UNIT_INFO[$volumeUnitId];
+        $volumeLiters = $volume * $volumeUnitInfo['conversion'];
+        if ($volumeLiters <= 0 || $volumeLiters > 5000) {
+            return self::makeError('volume is out of range: ' . $volume, 'volume', 0, Constants::ERROR_RANGE);
+        }
+
+        if (self::isNotNumeric($temperature)) {
+            return self::makeError('temperature ' . $temperature . ' is not a number.', 'temperature', 2, Constants::ERROR_IS_NAN);
+        }
+        $temperature = self::toFloat($temperature);
+
+        if ($temperatureUnit === 'celcius' || $temperatureUnit === 'c') {
+            $temperatureUnitId = Constants::TEMPERATURE_UNIT_CELSIUS;
+            $temperatureF = ($temperature * 9) / 5 + 32;
+        } elseif ($temperatureUnit === 'fahrenheit' || $temperatureUnit === 'f') {
+            $temperatureUnitId = Constants::TEMPERATURE_UNIT_FAHRENHEIT;
+            $temperatureF = $temperature;
+        } else {
+            return self::makeError(
+                'Unknown temperature unit: ' . $temperatureUnit,
+                'temperatureUnit',
+                3,
+                Constants::ERROR_INVALID_ARGUMENTS
+            );
+        }
+        // the residual-CO2 regression below is only fit over roughly this temperature range
+        if ($temperatureF < 32 || $temperatureF > 100) {
+            return self::makeError('temperature is out of range: ' . $temperature, 'temperature', 2, Constants::ERROR_RANGE);
+        }
+
+        if (self::isNotNumeric($targetCO2)) {
+            return self::makeError('targetCO2 ' . $targetCO2 . ' is not a number.', 'targetCO2', 4, Constants::ERROR_IS_NAN);
+        }
+        $targetCO2 = self::toFloat($targetCO2);
+        if ($targetCO2 <= 0 || $targetCO2 > 5) {
+            return self::makeError('targetCO2 is out of range: ' . $targetCO2, 'targetCO2', 4, Constants::ERROR_RANGE);
+        }
+
+        $primingSugarId = self::getPrimingSugarIdentifier($primingSugar);
+        if ($primingSugarId === null) {
+            return self::makeError(
+                'Unknown priming sugar: ' . $primingSugar,
+                'primingSugar',
+                5,
+                Constants::ERROR_INVALID_ARGUMENTS
+            );
+        }
+        $primingSugarInfo = Constants::PRIMING_SUGAR_INFO[$primingSugarId];
+
+        $residualCO2 = 3.0378 - 0.050062 * $temperatureF + 0.00026555 * $temperatureF * $temperatureF;
+        $volumeGallonsUS = $volumeLiters / Constants::VOLUME_UNIT_INFO[Constants::VOLUME_UNIT_GALLONS_US]['conversion'];
+        $cornSugarGrams = 15.195 * $volumeGallonsUS * ($targetCO2 - $residualCO2);
+        // can't add negative sugar -- a beer/mead already at or above the target just needs none
+        $primingSugarGrams = max(0, $cornSugarGrams * $primingSugarInfo['factor']);
+
+        return [
+            'error' => false,
+            'volume' => $volume,
+            'volumeUnit' => $volumeUnitInfo,
+            'temperature' => $temperature,
+            'temperatureUnit' => Constants::TEMPERATURE_UNIT_NAMES[$temperatureUnitId],
+            'targetCO2' => $targetCO2,
+            'residualCO2' => round($residualCO2 * 100) / 100,
+            'primingSugar' => $primingSugarInfo,
+            'primingSugarGrams' => round($primingSugarGrams * 10) / 10,
+            'primingSugarOunces' => round(($primingSugarGrams / 28.349523125) * 100) / 100,
+        ];
+    }
 }

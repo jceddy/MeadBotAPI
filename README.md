@@ -92,6 +92,7 @@ route called with the wrong HTTP method, and `200` otherwise.
 | POST | `/api/v1/calculate-nutrients` | All optional — `units`, `volume`, `yan`, and various nutrient-limit/ratio overrides (see [docs](#api-docs)) | `!calculate-nutrients` |
 | POST | `/api/v1/build-batch` | All optional — `units`, `volume`, `yeastAbv`, `nutrientRegimen`, and many more (see [docs](#api-docs)) | `!build-batch` |
 | POST | `/api/v1/calculate-mead` | All optional — `units`, `targetGravity`/`targetVolume`/`targetAbv` (any two solve the third), `additionalSugars`, and many more (see [docs](#api-docs)) | `!calculate-mead` |
+| POST | `/api/v1/priming-sugar` | `volume`, `volumeUnit`, `temperature`, `temperatureUnit`, `targetCO2`, `primingSugar` (`corn_sugar`/`table_sugar`/`dme`/`honey`) | `!prime`‡ |
 | GET | `/api/v1/yeast-requirements` | — | `!list-yeast-requirements` |
 | GET | `/api/v1/sugar-sources/{name}` | — | `GetSugarSourceIdentifier` |
 | POST | `/api/v1/dates/days-between` | `date1`, `date2` (parseable date/time strings) | `GetDaysBetween` |
@@ -117,6 +118,14 @@ solve branches — both since fixed in the MeadBot repo too. One difference rema
 "solve og" branch (`fg`+`abv` given), while this endpoint uses the same formula (an iterative
 search against the real cubic ABV formula) for both, since it has no existing consumers to
 preserve that inconsistency for.
+
+‡ `/priming-sugar` uses the Zahm & Nagel residual-CO2 regression and the standard corn-sugar-
+per-US-gallon-per-CO2-volume priming formula (both from Hall, M.L. "Brew by the Numbers,"
+*Zymurgy* Vol. 18 No. 2, 1995); other sugars are derived from corn sugar via published
+conversion factors (`Constants::PRIMING_SUGAR_INFO`). These are long-standing homebrewing
+approximations, not exact figures — overcarbonation from a bad priming estimate can burst
+bottles, so always weigh priming sugar rather than eyeballing it and store conditioning bottles
+somewhere that can contain a failure.
 
 ### Examples
 
