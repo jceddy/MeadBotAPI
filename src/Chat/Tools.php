@@ -371,7 +371,7 @@ final class Tools
                         'The beverage\'s temperature at/near the end of fermentation, in temperatureUnit units. '
                             . 'Range (in Fahrenheit) 32-100.'
                     ),
-                    'temperatureUnit' => self::enumString(['c', 'celcius', 'f', 'fahrenheit'], 'Unit temperature is expressed in.'),
+                    'temperatureUnit' => self::enumString(['c', 'celsius', 'celcius', 'f', 'fahrenheit'], 'Unit temperature is expressed in.'),
                     'targetCO2' => self::number('Desired carbonation level, in volumes of CO2, e.g. 2.4. Range 0-5.'),
                     'primingSugar' => self::enumString(
                         ['corn_sugar', 'table_sugar', 'dme', 'honey'],

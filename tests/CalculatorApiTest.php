@@ -133,6 +133,17 @@ final class CalculatorApiTest extends TestCase
         self::assertSame(Constants::ERROR_INVALID_ARGUMENTS, $result['errorType']);
     }
 
+    public function testConvertTemperatureAcceptsBothTheCorrectAndLegacySpellings(): void
+    {
+        $correct = CalculatorApi::convertTemperature(100, 'celsius');
+        $legacy = CalculatorApi::convertTemperature(100, 'celcius');
+
+        self::assertFalse($correct['error']);
+        self::assertSame(212.0, $correct['toTemperature']);
+        self::assertFalse($legacy['error']);
+        self::assertSame(212.0, $legacy['toTemperature']);
+    }
+
     public function testConvertSgToBrix(): void
     {
         self::assertEqualsWithDelta(21.56849571300006, CalculatorApi::convertSGToBrix(1.090), 1e-9);
@@ -264,6 +275,16 @@ final class CalculatorApiTest extends TestCase
 
         self::assertSame($fromF['residualCO2'], $fromC['residualCO2']);
         self::assertSame($fromF['primingSugarGrams'], $fromC['primingSugarGrams']);
+    }
+
+    public function testCalculatePrimingSugarAcceptsBothTheCorrectAndLegacySpellings(): void
+    {
+        $correct = CalculatorApi::calculatePrimingSugar(5, 'gallons_us', 20, 'celsius', 2.4, 'corn_sugar');
+        $legacy = CalculatorApi::calculatePrimingSugar(5, 'gallons_us', 20, 'celcius', 2.4, 'corn_sugar');
+
+        self::assertFalse($correct['error']);
+        self::assertFalse($legacy['error']);
+        self::assertSame($correct['primingSugarGrams'], $legacy['primingSugarGrams']);
     }
 
     public function testCalculatePrimingSugarConvertsVolumeUnitsBeforeComputing(): void

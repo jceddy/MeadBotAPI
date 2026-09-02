@@ -84,7 +84,7 @@ route called with the wrong HTTP method, and `200` otherwise.
 | POST | `/api/v1/volume/convert` | `amount`, `fromUnit`, `toUnit` | `ConvertVolume` |
 | GET | `/api/v1/honey-units/{name}` | — | `GetHoneyUnit` |
 | POST | `/api/v1/honey/convert` | `amount`, `fromUnit`, `toUnit` | `ConvertHoneyUnits` |
-| POST | `/api/v1/temperature/convert` | `fromTemperature`, `fromUnit` (`c`/`celcius`/`f`/`fahrenheit`) | `ConvertTemperature` |
+| POST | `/api/v1/temperature/convert` | `fromTemperature`, `fromUnit` (`c`/`celsius`/`celcius`/`f`/`fahrenheit`) | `ConvertTemperature` |
 | POST | `/api/v1/sg-to-brix` | `sg` | `ConvertSGToBrix` |
 | POST | `/api/v1/delle` | `abv`, `sg` | `ComputeDelle` |
 | POST | `/api/v1/potential-alcohol` | `gravityUnits`, `abvUnits`, and at least one of `og`/`fg`/`abv` (see [docs](#api-docs) for the solve priority) | `!potential-alcohol`\* |

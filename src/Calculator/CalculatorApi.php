@@ -414,7 +414,7 @@ final class CalculatorApi
 
     /**
      * convertTemperature(fromTemperature, fromUnit) - convert a temperature from one unit to
-     * the other ('celcius'/'c' <-> 'fahrenheit'/'f').
+     * the other ('celsius'/'celcius'/'c' <-> 'fahrenheit'/'f').
      *
      * @return array<string, mixed>
      */
@@ -434,7 +434,7 @@ final class CalculatorApi
         $toUnitId = null;
         $toTemp = null;
 
-        if ($fromUnit === 'celcius' || $fromUnit === 'c') {
+        if ($fromUnit === 'celsius' || $fromUnit === 'celcius' || $fromUnit === 'c') {
             $fromUnitId = Constants::TEMPERATURE_UNIT_CELSIUS;
             $toUnitId = Constants::TEMPERATURE_UNIT_FAHRENHEIT;
             $toTemp = round((($fromTemperature * 9) / 5 + 32) * 100) / 100;
@@ -671,7 +671,7 @@ final class CalculatorApi
         }
         $temperature = self::toFloat($temperature);
 
-        if ($temperatureUnit === 'celcius' || $temperatureUnit === 'c') {
+        if ($temperatureUnit === 'celsius' || $temperatureUnit === 'celcius' || $temperatureUnit === 'c') {
             $temperatureUnitId = Constants::TEMPERATURE_UNIT_CELSIUS;
             $temperatureF = ($temperature * 9) / 5 + 32;
         } elseif ($temperatureUnit === 'fahrenheit' || $temperatureUnit === 'f') {
