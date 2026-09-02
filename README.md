@@ -277,7 +277,11 @@ third-party code in this repo remains Swagger UI under `public/docs/`). It has t
 - **Chat** — a browser client for the chat agent (see [Chat agent](#chat-agent) above), gated
   behind Discord login (see below). A model dropdown (populated with the same `gpt`/`ds` keys
   from `ModelCatalog` — see [Chat agent](#chat-agent)) lets a logged-in user pick which model
-  each message is sent to, same as MeadBot's `!chat --model`/`-m` flag.
+  each message is sent to, same as MeadBot's `!chat --model`/`-m` flag. Every assistant reply
+  gets a "Copy" button (below the message, not shown on the "Thinking..." placeholder or on an
+  error) that copies the reply's original text — not the rendered HTML — via the Clipboard API,
+  falling back to the legacy `document.execCommand('copy')` on a non-secure origin (plain HTTP)
+  or a browser without `navigator.clipboard`.
 
 ### Why chat needs a login
 

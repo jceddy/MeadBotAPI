@@ -590,6 +590,49 @@ function appendChatMessage(role, text) {
   return bubble;
 }
 
+// addChatCopyButton(bubble, text) - appends a "Copy" button to an assistant reply bubble that
+// copies the original reply text (not the rendered HTML) to the clipboard.
+function addChatCopyButton(bubble, text) {
+  const button = el('button', { class: 'chat-copy-btn', type: 'button' }, ['Copy']);
+  button.addEventListener('click', () => copyChatText(text, button));
+  bubble.appendChild(el('div', { class: 'chat-message-footer' }, [button]));
+}
+
+function copyChatText(text, button) {
+  const finish = (ok) => {
+    button.textContent = ok ? 'Copied!' : 'Copy failed';
+    button.disabled = true;
+    setTimeout(() => {
+      button.textContent = 'Copy';
+      button.disabled = false;
+    }, 1500);
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => finish(true),
+      () => finish(false)
+    );
+    return;
+  }
+
+  // Fallback for non-secure contexts (plain HTTP) or browsers without the Clipboard API.
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  let ok = false;
+  try {
+    ok = document.execCommand('copy');
+  } catch (error) {
+    ok = false;
+  }
+  document.body.removeChild(textarea);
+  finish(ok);
+}
+
 async function refreshLoginState() {
   const me = await fetch('/api/v1/auth/me').then((r) => r.json());
   currentUser = me.loggedIn ? me.user : null;
@@ -662,6 +705,7 @@ function initChat() {
       }
 
       pending.innerHTML = renderMarkdownish(result.reply);
+      addChatCopyButton(pending, result.reply);
       chatMessages = result.messages;
     } catch (error) {
       pending.classList.add('chat-message--error');
