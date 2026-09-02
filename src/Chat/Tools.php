@@ -37,6 +37,7 @@ final class Tools
         'calculate_nutrients' => 'calculateNutrients',
         'build_batch' => 'buildBatch',
         'calculate_mead' => 'calculateMead',
+        'calculate_priming_sugar' => 'calculatePrimingSugar',
         'list_yeast_requirements' => 'listYeastRequirements',
         'get_sugar_source' => 'getSugarSourceIdentifier',
         'get_days_between' => 'getDaysBetween',
@@ -354,6 +355,28 @@ final class Tools
                     'fillFkFirst' => self::boolean('Defaults to true.'),
                     'useGoferm' => self::boolean('Defaults to true.'),
                     'yeastPackGrams' => self::number('Defaults to 5.'),
+                ]
+            ),
+            self::tool(
+                'calculate_priming_sugar',
+                'Estimate the priming sugar needed to carbonate a batch to a target CO2 level via bottle '
+                    . 'conditioning, given batch volume, the beverage\'s temperature at/near the end of '
+                    . 'fermentation (used to estimate CO2 already dissolved), a target carbonation level, and '
+                    . 'which sugar will be used to prime.',
+                ['volume', 'volumeUnit', 'temperature', 'temperatureUnit', 'targetCO2', 'primingSugar'],
+                [
+                    'volume' => self::number('Batch volume, in volumeUnit units. Range (in liters) 0-5000.'),
+                    'volumeUnit' => self::enumString(array_values(Constants::VOLUME_UNIT_SLUGS), 'Unit volume is expressed in.'),
+                    'temperature' => self::number(
+                        'The beverage\'s temperature at/near the end of fermentation, in temperatureUnit units. '
+                            . 'Range (in Fahrenheit) 32-100.'
+                    ),
+                    'temperatureUnit' => self::enumString(['c', 'celsius', 'celcius', 'f', 'fahrenheit'], 'Unit temperature is expressed in.'),
+                    'targetCO2' => self::number('Desired carbonation level, in volumes of CO2, e.g. 2.4. Range 0-5.'),
+                    'primingSugar' => self::enumString(
+                        ['corn_sugar', 'table_sugar', 'dme', 'honey'],
+                        'Which sugar will be used to prime.'
+                    ),
                 ]
             ),
             self::tool(

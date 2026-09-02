@@ -25,6 +25,7 @@ tags:
   - name: Temperature
   - name: Blending
   - name: Nutrients
+  - name: Carbonation
   - name: Sugar sources
   - name: Dates
   - name: Misc
@@ -360,7 +361,7 @@ paths:
                 fromTemperature: { type: number, example: 100 }
                 fromUnit:
                   type: string
-                  description: One of `c`, `celcius`, `f`, `fahrenheit`.
+                  description: One of `c`, `celsius`, `celcius`, `f`, `fahrenheit`.
                   example: c
       responses:
         '200':
@@ -993,6 +994,88 @@ paths:
                       break3:
                         type: number
                         description: The 1/3 sugar break gravity, used to label the corresponding addition.
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /priming-sugar:
+    post:
+      tags: [Carbonation]
+      summary: Estimate priming sugar needed to carbonate a batch to a target CO2 level
+      description: >
+        Uses the Zahm & Nagel residual-CO2 regression and the standard corn-sugar-per-US-gallon-
+        per-CO2-volume priming formula (both from Hall, M.L. "Brew by the Numbers," Zymurgy Vol.
+        18 No. 2, 1995); other sugars are derived from corn sugar via published conversion
+        factors. These are long-standing homebrewing approximations, not exact figures --
+        overcarbonation from a bad priming estimate can burst bottles, so always weigh priming
+        sugar rather than eyeballing it.
+      operationId: calculatePrimingSugar
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [volume, volumeUnit, temperature, temperatureUnit, targetCO2, primingSugar]
+              properties:
+                volume:
+                  type: number
+                  description: Batch volume, in volumeUnit units. Range (in liters) 0-5000.
+                volumeUnit:
+                  type: string
+                  description: Unit volume is expressed in.
+                  example: gallons_us
+                temperature:
+                  type: number
+                  description: >
+                    The beverage's temperature at/near the end of fermentation (used to estimate
+                    how much CO2 is already dissolved), in temperatureUnit units. Range (in
+                    Fahrenheit) 32-100.
+                temperatureUnit:
+                  type: string
+                  enum: [c, celsius, celcius, f, fahrenheit]
+                  description: Unit temperature is expressed in.
+                targetCO2:
+                  type: number
+                  description: Desired carbonation level, in volumes of CO2, e.g. 2.4. Range 0-5.
+                primingSugar:
+                  type: string
+                  enum: [corn_sugar, table_sugar, dme, honey]
+                  description: Which sugar will be used to prime.
+              example:
+                volume: 5
+                volumeUnit: gallons_us
+                temperature: 68
+                temperatureUnit: f
+                targetCO2: 2.4
+                primingSugar: corn_sugar
+      responses:
+        '200':
+          description: Estimated priming sugar amount, plus the intermediate values used to compute it.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessFlag'
+                  - type: object
+                    properties:
+                      volume: { type: number }
+                      volumeUnit:
+                        $ref: '#/components/schemas/UnitInfo'
+                      temperature: { type: number }
+                      temperatureUnit: { type: string, example: Fahrenheit }
+                      targetCO2: { type: number }
+                      residualCO2:
+                        type: number
+                        description: Estimated CO2 volumes already dissolved at the given temperature.
+                      primingSugar:
+                        type: object
+                        properties:
+                          name: { type: string, example: Corn Sugar (Dextrose) }
+                          factor:
+                            type: number
+                            description: Conversion factor relative to corn sugar (1.00).
+                      primingSugarGrams: { type: number }
+                      primingSugarOunces: { type: number }
         '400':
           $ref: '#/components/responses/Error'
 

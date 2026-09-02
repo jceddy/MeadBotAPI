@@ -133,6 +133,17 @@ final class CalculatorApiTest extends TestCase
         self::assertSame(Constants::ERROR_INVALID_ARGUMENTS, $result['errorType']);
     }
 
+    public function testConvertTemperatureAcceptsBothTheCorrectAndLegacySpellings(): void
+    {
+        $correct = CalculatorApi::convertTemperature(100, 'celsius');
+        $legacy = CalculatorApi::convertTemperature(100, 'celcius');
+
+        self::assertFalse($correct['error']);
+        self::assertSame(212.0, $correct['toTemperature']);
+        self::assertFalse($legacy['error']);
+        self::assertSame(212.0, $legacy['toTemperature']);
+    }
+
     public function testConvertSgToBrix(): void
     {
         self::assertEqualsWithDelta(21.56849571300006, CalculatorApi::convertSGToBrix(1.090), 1e-9);
@@ -215,5 +226,163 @@ final class CalculatorApiTest extends TestCase
         self::assertCount(count(Constants::YAN_REQUIREMENT_BY_YEAST), $list);
         self::assertContains(['yeast' => 'Lalvin 71B', 'requirement' => 'Low'], $list);
         self::assertContains(['yeast' => 'Kveik', 'requirement' => 'Kveik'], $list);
+    }
+
+    public function testGetPrimingSugarIdentifier(): void
+    {
+        self::assertSame(Constants::PRIMING_SUGAR_CORN_SUGAR, CalculatorApi::getPrimingSugarIdentifier('corn_sugar'));
+        self::assertSame(Constants::PRIMING_SUGAR_CORN_SUGAR, CalculatorApi::getPrimingSugarIdentifier('dextrose'));
+        self::assertSame(Constants::PRIMING_SUGAR_TABLE_SUGAR, CalculatorApi::getPrimingSugarIdentifier('sugar'));
+        self::assertSame(Constants::PRIMING_SUGAR_DME, CalculatorApi::getPrimingSugarIdentifier('dme'));
+        self::assertSame(Constants::PRIMING_SUGAR_HONEY, CalculatorApi::getPrimingSugarIdentifier('honey'));
+        self::assertNull(CalculatorApi::getPrimingSugarIdentifier('unicorn_dust'));
+    }
+
+    public function testCalculatePrimingSugarMatchesTheWellKnownReferenceFigure(): void
+    {
+        // 5gal/68F/2.4vol corn sugar is a commonly-cited reference figure (~4oz) -- matches the
+        // Node.js reference run of MeadBot's CalculatePrimingSugar with the same inputs.
+        $result = CalculatorApi::calculatePrimingSugar(5, 'gallons_us', 68, 'f', 2.4, 'corn_sugar');
+
+        self::assertFalse($result['error']);
+        self::assertSame(0.86, $result['residualCO2']);
+        self::assertSame(116.9, $result['primingSugarGrams']);
+        self::assertSame(4.12, $result['primingSugarOunces']);
+    }
+
+    public function testCalculatePrimingSugarNeedsLessTableSugarThanCornSugar(): void
+    {
+        $cornSugar = CalculatorApi::calculatePrimingSugar(5, 'gallons_us', 68, 'f', 2.4, 'corn_sugar');
+        $tableSugar = CalculatorApi::calculatePrimingSugar(5, 'gallons_us', 68, 'f', 2.4, 'table_sugar');
+
+        self::assertLessThan($cornSugar['primingSugarGrams'], $tableSugar['primingSugarGrams']);
+    }
+
+    public function testCalculatePrimingSugarNeedsMoreDmeAndHoneyThanCornSugar(): void
+    {
+        $cornSugar = CalculatorApi::calculatePrimingSugar(5, 'gallons_us', 68, 'f', 2.4, 'corn_sugar');
+        $dme = CalculatorApi::calculatePrimingSugar(5, 'gallons_us', 68, 'f', 2.4, 'dme');
+        $honey = CalculatorApi::calculatePrimingSugar(5, 'gallons_us', 68, 'f', 2.4, 'honey');
+
+        self::assertGreaterThan($cornSugar['primingSugarGrams'], $dme['primingSugarGrams']);
+        self::assertGreaterThan($cornSugar['primingSugarGrams'], $honey['primingSugarGrams']);
+    }
+
+    public function testCalculatePrimingSugarConvertsCelsiusBeforeComputingResidualCo2(): void
+    {
+        $fromF = CalculatorApi::calculatePrimingSugar(5, 'gallons_us', 68, 'f', 2.4, 'corn_sugar');
+        $fromC = CalculatorApi::calculatePrimingSugar(5, 'gallons_us', 20, 'c', 2.4, 'corn_sugar');
+
+        self::assertSame($fromF['residualCO2'], $fromC['residualCO2']);
+        self::assertSame($fromF['primingSugarGrams'], $fromC['primingSugarGrams']);
+    }
+
+    public function testCalculatePrimingSugarAcceptsBothTheCorrectAndLegacySpellings(): void
+    {
+        $correct = CalculatorApi::calculatePrimingSugar(5, 'gallons_us', 20, 'celsius', 2.4, 'corn_sugar');
+        $legacy = CalculatorApi::calculatePrimingSugar(5, 'gallons_us', 20, 'celcius', 2.4, 'corn_sugar');
+
+        self::assertFalse($correct['error']);
+        self::assertFalse($legacy['error']);
+        self::assertSame($correct['primingSugarGrams'], $legacy['primingSugarGrams']);
+    }
+
+    public function testCalculatePrimingSugarConvertsVolumeUnitsBeforeComputing(): void
+    {
+        $fromGallons = CalculatorApi::calculatePrimingSugar(5, 'gallons_us', 68, 'f', 2.4, 'corn_sugar');
+        $fromLiters = CalculatorApi::calculatePrimingSugar(18.9270589455, 'liters', 68, 'f', 2.4, 'corn_sugar');
+
+        self::assertSame($fromGallons['primingSugarGrams'], $fromLiters['primingSugarGrams']);
+    }
+
+    public function testCalculatePrimingSugarClampsToZeroInsteadOfGoingNegative(): void
+    {
+        // At 34F, residual CO2 is well above a deliberately-low 0.6 target, so no sugar should
+        // be needed rather than a negative amount.
+        $result = CalculatorApi::calculatePrimingSugar(5, 'gallons_us', 34, 'f', 0.6, 'corn_sugar');
+
+        self::assertFalse($result['error']);
+        self::assertSame(0.0, $result['primingSugarGrams']);
+    }
+
+    public function testCalculatePrimingSugarRejectsNonNumericVolume(): void
+    {
+        $result = CalculatorApi::calculatePrimingSugar('a lot', 'gallons_us', 68, 'f', 2.4, 'corn_sugar');
+
+        self::assertTrue($result['error']);
+        self::assertSame('volume', $result['errorArgument']);
+        self::assertSame(Constants::ERROR_IS_NAN, $result['errorType']);
+    }
+
+    public function testCalculatePrimingSugarRejectsUnknownVolumeUnit(): void
+    {
+        $result = CalculatorApi::calculatePrimingSugar(5, 'furlongs', 68, 'f', 2.4, 'corn_sugar');
+
+        self::assertTrue($result['error']);
+        self::assertSame('volumeUnit', $result['errorArgument']);
+        self::assertSame(Constants::ERROR_INVALID_ARGUMENTS, $result['errorType']);
+    }
+
+    public function testCalculatePrimingSugarRejectsOutOfRangeVolume(): void
+    {
+        $result = CalculatorApi::calculatePrimingSugar(0, 'gallons_us', 68, 'f', 2.4, 'corn_sugar');
+
+        self::assertTrue($result['error']);
+        self::assertSame('volume', $result['errorArgument']);
+        self::assertSame(Constants::ERROR_RANGE, $result['errorType']);
+    }
+
+    public function testCalculatePrimingSugarRejectsNonNumericTemperature(): void
+    {
+        $result = CalculatorApi::calculatePrimingSugar(5, 'gallons_us', 'warm', 'f', 2.4, 'corn_sugar');
+
+        self::assertTrue($result['error']);
+        self::assertSame('temperature', $result['errorArgument']);
+        self::assertSame(Constants::ERROR_IS_NAN, $result['errorType']);
+    }
+
+    public function testCalculatePrimingSugarRejectsUnknownTemperatureUnit(): void
+    {
+        $result = CalculatorApi::calculatePrimingSugar(5, 'gallons_us', 68, 'kelvin', 2.4, 'corn_sugar');
+
+        self::assertTrue($result['error']);
+        self::assertSame('temperatureUnit', $result['errorArgument']);
+        self::assertSame(Constants::ERROR_INVALID_ARGUMENTS, $result['errorType']);
+    }
+
+    public function testCalculatePrimingSugarRejectsOutOfRangeTemperature(): void
+    {
+        $result = CalculatorApi::calculatePrimingSugar(5, 'gallons_us', 150, 'f', 2.4, 'corn_sugar');
+
+        self::assertTrue($result['error']);
+        self::assertSame('temperature', $result['errorArgument']);
+        self::assertSame(Constants::ERROR_RANGE, $result['errorType']);
+    }
+
+    public function testCalculatePrimingSugarRejectsNonNumericTargetCo2(): void
+    {
+        $result = CalculatorApi::calculatePrimingSugar(5, 'gallons_us', 68, 'f', 'fizzy', 'corn_sugar');
+
+        self::assertTrue($result['error']);
+        self::assertSame('targetCO2', $result['errorArgument']);
+        self::assertSame(Constants::ERROR_IS_NAN, $result['errorType']);
+    }
+
+    public function testCalculatePrimingSugarRejectsOutOfRangeTargetCo2(): void
+    {
+        $result = CalculatorApi::calculatePrimingSugar(5, 'gallons_us', 68, 'f', 10, 'corn_sugar');
+
+        self::assertTrue($result['error']);
+        self::assertSame('targetCO2', $result['errorArgument']);
+        self::assertSame(Constants::ERROR_RANGE, $result['errorType']);
+    }
+
+    public function testCalculatePrimingSugarRejectsUnknownPrimingSugar(): void
+    {
+        $result = CalculatorApi::calculatePrimingSugar(5, 'gallons_us', 68, 'f', 2.4, 'unicorn_dust');
+
+        self::assertTrue($result['error']);
+        self::assertSame('primingSugar', $result['errorArgument']);
+        self::assertSame(Constants::ERROR_INVALID_ARGUMENTS, $result['errorType']);
     }
 }

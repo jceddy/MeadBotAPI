@@ -155,6 +155,7 @@ $router->post('/api/v1/calculate-blend', fn (array $p) => Operations::calculateB
 $router->post('/api/v1/calculate-nutrients', fn (array $p) => Operations::calculateNutrients($p));
 $router->post('/api/v1/build-batch', fn (array $p) => Operations::buildBatch($p));
 $router->post('/api/v1/calculate-mead', fn (array $p) => Operations::calculateMead($p));
+$router->post('/api/v1/priming-sugar', fn (array $p) => Operations::calculatePrimingSugar($p));
 
 $router->get('/api/v1/yeast-requirements', fn () => Operations::listYeastRequirements());
 
