@@ -279,6 +279,11 @@ const TOOLS = [
 function el(tag, attrs, children) {
   const node = document.createElement(tag);
   Object.entries(attrs || {}).forEach(([key, value]) => {
+    // Skip undefined outright -- setAttribute(key, undefined) still sets the attribute (as the
+    // string "undefined"), which for a boolean attribute like `selected` makes it present, not
+    // absent. Without this, every <option> after the intended default also ends up "selected",
+    // and the browser resolves that to whichever one comes last in the list.
+    if (value === undefined) return;
     if (key === 'class') node.className = value;
     else if (key === 'html') node.innerHTML = value;
     else if (key.startsWith('on')) node.addEventListener(key.slice(2), value);
