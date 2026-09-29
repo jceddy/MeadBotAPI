@@ -37,10 +37,13 @@ final class ModelCatalog
             ],
         ],
         'ds' => [
-            // Fireworks retired the unversioned deepseek-v4-flash id in favor of this official
-            // 0731 release (requests to the old id now 404 with "Model not found, inaccessible,
-            // and/or not deployed").
-            'fireworksModel' => 'accounts/fireworks/models/deepseek-v4-flash-0731',
+            // Fireworks retired deepseek-v4-flash-0731 in favor of this model (requests to the
+            // old id now 404 with "Model not found, inaccessible, and/or not deployed") --
+            // DeepSeek itself retired the 0731 checkpoint on 2026-09-10, redirecting the
+            // deepseek-v4-flash name to V4.1 Flash, and Fireworks followed suit. Pricing is
+            // unchanged (still the "DSV4 off-peak rate" tier below), confirmed against several
+            // independent sources.
+            'fireworksModel' => 'accounts/fireworks/models/deepseek-v4p1-flash',
             'pricingTiers' => [
                 [
                     'effectiveAt' => null,

@@ -245,13 +245,14 @@ turn against, from a small hardcoded catalog in `src/Chat/ModelCatalog.php`:
 
 | `model` | Fireworks model | Price per 1M tokens (input / cached input / output) |
 | --- | --- | --- |
-| `ds` (default) | `accounts/fireworks/models/deepseek-v4-flash-0731` | $0.14 / $0.028 / $0.28, until $0.22 / $0.007 / $0.66 takes effect 2026-08-22 12:00 UTC†|
+| `ds` (default) | `accounts/fireworks/models/deepseek-v4p1-flash` | $0.22 / $0.007 / $0.66† |
 | `gpt` | `accounts/fireworks/models/gpt-oss-120b` (OpenAI's open-weight reasoning/tool-calling model) | $0.15 / $0.014 / $0.60 |
 
-† Fireworks' "DSV4 off-peak rate" (applies 24hrs/day despite the name) — a revision of a
-previously-announced, twice-as-expensive rate change that never took effect, after their
-performance work on this model landed ahead of schedule. Already pre-populated as a dated tier
-(see below) so it takes effect on its own with no deploy needed that day.
+† Fireworks' "DSV4 off-peak rate" (applies 24hrs/day despite the name), in effect since
+2026-08-22 12:00 UTC — a revision of a previously-announced, twice-as-expensive rate change that
+never took effect, after their performance work on this model landed ahead of schedule.
+Pre-populated as a dated tier (see below) so it took effect on its own with no deploy needed that
+day.
 
 Omitting `model` (or MeadBot's `!chat` command omitting its `--model`/`-m` flag) uses `ds`. An
 unrecognized `model` value gets a `400` error listing the valid keys. `costUsd` in the response is
